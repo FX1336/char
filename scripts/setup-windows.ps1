@@ -63,13 +63,19 @@ Write-Step "Visual C++ Build Tools"
 $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $hasMSVC = $false
 if (Test-Path $vsWhere) {
-    $vsInstall = & $vsWhere -latest -requires Microsoft.VisualCpp.Tools.HostX64.TargetX64 -property installationPath 2>$null
-    $hasMSVC = $vsInstall -ne ""
+    $vsInstall = & $vsWhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+    $hasMSVC = ($vsInstall -ne $null) -and ($vsInstall.Trim() -ne "")
 }
 if (-not $hasMSVC) {
     Write-Host "    Installing Visual C++ Build Tools (this may take a few minutes)..."
     winget install --id Microsoft.VisualStudio.2022.BuildTools --silent --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-    Write-Ok "Visual C++ Build Tools installed"
+    $exitCode = $LASTEXITCODE
+    # 1602 = already installing / user interaction issue; 0 and 3010 = success (3010 = reboot needed)
+    if ($exitCode -ne 0 -and $exitCode -ne 3010 -and $exitCode -ne 1602) {
+        Write-Host "    WARN: winget exited with code $exitCode — check manually if MSVC is installed" -ForegroundColor Yellow
+    } else {
+        Write-Ok "Visual C++ Build Tools installed"
+    }
 } else {
     Write-Skip "Visual C++ Build Tools"
 }
@@ -81,7 +87,7 @@ if (-not (Test-Command "rustup")) {
     $rustupInit = Join-Path $env:TEMP "rustup-init.exe"
     Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile $rustupInit
     & $rustupInit -y --default-toolchain "$RUST_VERSION" --default-host x86_64-pc-windows-msvc --component rust-analyzer,rustfmt,clippy
-    Remove-Item $rustupInit -Force
+    try { Remove-Item -LiteralPath $rustupInit -Force -ErrorAction SilentlyContinue } catch {}
     $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
     Write-Ok "Rust $RUST_VERSION installed"
 } else {
