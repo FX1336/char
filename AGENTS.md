@@ -13,6 +13,14 @@ TinyBase as the primary data store (schema at `packages/store/src/tinybase.ts`),
 - Web dev: `pnpm -F @hypr/web dev`
 - Dev docs: https://char.com/docs/developers
 
+### Windows (no admin rights required)
+
+- First-time setup: `powershell -ExecutionPolicy Bypass -File .\scripts\setup-windows.ps1`
+  - Installs MinGW-w64 (GNU toolchain) to `$HOME\.local\mingw64`, fnm + Node 22 to `$HOME\.local\bin`, pnpm, and project deps — all user-scope.
+- Start dev: `powershell -ExecutionPolicy Bypass -File .\scripts\dev-windows.ps1`
+  - Sets PATH automatically; no separate profile setup needed to start.
+- Rust target: `x86_64-pc-windows-gnu` (local dev); CI uses `x86_64-pc-windows-msvc` on `windows-latest`.
+
 ## Guidelines
 
 - Format via dprint after making changes.

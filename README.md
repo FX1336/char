@@ -27,7 +27,7 @@ brew install --cask fastrepl/fastrepl/char
 ```
 
 - [macOS](https://char.com/download) (public beta)
-- [Windows](https://github.com/fastrepl/char/issues/66) (q2 2026)
+- [Windows](https://github.com/fastrepl/char/issues/66) (in development, q2 2026)
 - [Linux](https://github.com/fastrepl/char/issues/67) (q2 2026)
 
 ## Highlights
