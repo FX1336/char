@@ -75,6 +75,22 @@ if (-not (Test-Path (Join-Path $REPO_ROOT "node_modules"))) {
 }
 Write-Host "    deps    node_modules present"
 
+# ── Cargo-Registry-Schreibschutz aufheben (libsql-ffi cmake-Build) ───────────
+# libsql-ffi kompiliert SQLite3MultipleCiphers via cmake direkt im Registry-
+# Quellverzeichnis. Cargo setzt dort READ_ONLY; das fuehrt zu code=5 (Zugriff
+# verweigert). Wir entfernen das Attribut gezielt fuer dieses Crate.
+$libsqlFfiDir = "$env:USERPROFILE\.cargo\registry\src"
+if (Test-Path $libsqlFfiDir) {
+    Get-ChildItem -Path $libsqlFfiDir -Recurse -Filter "libsql-ffi-*" -Directory `
+        -ErrorAction SilentlyContinue |
+    ForEach-Object {
+        Get-ChildItem -Path $_.FullName -Recurse -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $_.Attributes = $_.Attributes -band (-bnot [System.IO.FileAttributes]::ReadOnly)
+            }
+    }
+}
+
 # ── Start dev server ─────────────────────────────────────────────────────────
 Write-Step "Starting Char (dev mode)"
 Write-Host "    Frontend:  http://localhost:1422"
