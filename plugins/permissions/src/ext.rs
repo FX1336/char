@@ -198,6 +198,13 @@ impl<'a, R: tauri::Runtime, M: tauri::Manager<R>> Permissions<'a, R, M> {
                 .wait()?;
         }
 
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/c", "start", "", "ms-settings:privacy-microphone"])
+                .spawn()?;
+        }
+
         Ok(())
     }
 

@@ -15,10 +15,14 @@ const STEPS_MACOS: OnboardingStep[] = [
   "calendar",
   "final",
 ];
+const STEPS_WINDOWS: OnboardingStep[] = ["permissions", "login", "final"];
 const STEPS_OTHER: OnboardingStep[] = ["login", "final"];
 
 export function getOnboardingSteps(): OnboardingStep[] {
-  return platform() === "macos" ? STEPS_MACOS : STEPS_OTHER;
+  const p = platform();
+  if (p === "macos") return STEPS_MACOS;
+  if (p === "windows") return STEPS_WINDOWS;
+  return STEPS_OTHER;
 }
 
 export function getInitialStep(): OnboardingStep {

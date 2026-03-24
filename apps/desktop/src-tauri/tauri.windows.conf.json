@@ -4,6 +4,11 @@
     "beforeBundleCommand": ""
   },
   "bundle": {
-    "resources": {}
+    "resources": {},
+    "windows": {
+      "nsis": {
+        "installMode": "perUser"
+      }
+    }
   }
 }
