@@ -58,7 +58,8 @@ if ($null -eq $webview2) {
 # ── MinGW-w64 (portable C++ toolchain, no admin needed) ──────────────────────
 Write-Step "MinGW-w64 (C++ toolchain)"
 $gccExe = "$MINGW_DIR\bin\gcc.exe"
-if (-not (Test-Path $gccExe)) {
+$crt2 = "$MINGW_DIR\x86_64-w64-mingw32\lib\crt2.o"
+if (-not (Test-Path $gccExe) -or -not (Test-Path $crt2)) {
     Write-Host "    Fetching latest WinLibs release info..."
     $release = Invoke-RestMethod "https://api.github.com/repos/brechtsanders/winlibs_mingw/releases/latest"
     $asset = $release.assets | Where-Object { $_.name -match "^winlibs-x86_64-posix-seh-gcc-.*ucrt.*\.zip$" } | Select-Object -First 1
