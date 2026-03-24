@@ -108,33 +108,45 @@ if ($targets -notcontains "x86_64-pc-windows-gnu") {
 }
 
 # ── ONNX Runtime 1.22.0 (MinGW import library) ───────────────────────────────
-# ort-sys 2.0.0-rc.10 requires ORT 1.22.0 but only ships prebuilt binaries for
-# MSVC targets.  We download the MSVC build and convert it to a MinGW import
-# library (.dll.a) using gendef + dlltool from the MinGW-w64 installed above.
+# ort-sys 2.0.0-rc.10 requires ORT 1.22.0.  The pyke CDN prebuilt for Windows
+# is a static MSVC .lib (no DLL) — MinGW cannot use it.  The official Microsoft
+# release ships onnxruntime.dll; we convert that to a MinGW import library
+# (.dll.a) with gendef + dlltool from the MinGW-w64 installed above.
 Write-Step "ONNX Runtime 1.22.0 (MinGW import library)"
+$ORT_VERSION = "1.22.0"
 $ORT_DIR = "$HOME\.local\onnxruntime"
 $ORT_IMPORT_LIB = "$ORT_DIR\lib\libonnxruntime.dll.a"
 
 if (-not (Test-Path $ORT_IMPORT_LIB)) {
-    Write-Host "    Downloading ONNX Runtime 1.22.0 (MSVC prebuilt)..."
-    $ortTgz = Join-Path $env:TEMP "ort-msvc.tgz"
-    Invoke-WebRequest -Uri "https://cdn.pyke.io/0/pyke:ort-rs/ms@1.22.0/x86_64-pc-windows-msvc.tgz" -OutFile $ortTgz
-    Write-Host "    Extracting..."
-    New-Item -ItemType Directory -Force -Path $ORT_DIR | Out-Null
-    tar -xzf "$ortTgz" -C "$ORT_DIR"
-    try { Remove-Item -LiteralPath $ortTgz -Force -ErrorAction SilentlyContinue } catch {}
+    Write-Host "    Downloading ONNX Runtime $ORT_VERSION (official Microsoft release)..."
+    $ortZip = Join-Path $env:TEMP "onnxruntime-win-x64.zip"
+    Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v$ORT_VERSION/onnxruntime-win-x64-$ORT_VERSION.zip" -OutFile $ortZip
 
-    # Locate onnxruntime.dll inside the extracted tree (handles any top-level dir)
-    $dllPath = Get-ChildItem -Path $ORT_DIR -Filter "onnxruntime.dll" -Recurse -ErrorAction SilentlyContinue |
-        Select-Object -First 1 -ExpandProperty FullName
-    if (-not $dllPath) {
-        Write-Error "onnxruntime.dll not found in $ORT_DIR after extraction."
+    Write-Host "    Extracting..."
+    $tempExtract = Join-Path $env:TEMP "ort-extract"
+    if (Test-Path $tempExtract) { Remove-Item -Recurse -Force $tempExtract }
+    Expand-Archive -LiteralPath $ortZip -DestinationPath $tempExtract -Force
+    try { Remove-Item -LiteralPath $ortZip -Force -ErrorAction SilentlyContinue } catch {}
+
+    # The zip contains a single top-level versioned directory; strip it.
+    $innerDir = Get-ChildItem -Path $tempExtract -Directory | Select-Object -First 1
+    if (-not $innerDir) {
+        Write-Error "Unexpected archive structure in ORT zip (no top-level directory found)."
         exit 1
     }
-    $ortLibDir = Split-Path $dllPath -Parent
+    New-Item -ItemType Directory -Force -Path $ORT_DIR | Out-Null
+    Get-ChildItem -Path $innerDir.FullName | ForEach-Object {
+        Move-Item -Path $_.FullName -Destination $ORT_DIR -Force
+    }
+    try { Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue } catch {}
+
+    if (-not (Test-Path "$ORT_DIR\lib\onnxruntime.dll")) {
+        Write-Error "onnxruntime.dll not found at $ORT_DIR\lib\ after extraction."
+        exit 1
+    }
 
     Write-Host "    Creating MinGW import library (gendef + dlltool)..."
-    Push-Location $ortLibDir
+    Push-Location "$ORT_DIR\lib"
     gendef onnxruntime.dll
     if ($LASTEXITCODE -ne 0) {
         Pop-Location
@@ -149,7 +161,7 @@ if (-not (Test-Path $ORT_IMPORT_LIB)) {
     }
     try { Remove-Item -Force onnxruntime.def -ErrorAction SilentlyContinue } catch {}
     Pop-Location
-    Write-Ok "ONNX Runtime import library: $ortLibDir\libonnxruntime.dll.a"
+    Write-Ok "ONNX Runtime import library created at $ORT_IMPORT_LIB"
 } else {
     Write-Skip "ONNX Runtime MinGW import library"
 }
