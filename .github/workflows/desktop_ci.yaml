@@ -33,6 +33,8 @@ jobs:
             runner: "depot-ubuntu-22.04-8"
           - platform: "linux-aarch64"
             runner: "depot-ubuntu-22.04-arm-8"
+          - platform: "windows"
+            runner: "windows-latest"
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4

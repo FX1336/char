@@ -2,6 +2,9 @@ inputs:
   platform:
     required: false
     default: ""
+  signing:
+    required: false
+    default: "false"
 runs:
   using: "composite"
   steps:
@@ -43,7 +46,7 @@ runs:
         toolchain: ${{ steps.toolchain.outputs.channel }}
         targets: x86_64-pc-windows-msvc
         components: ${{ steps.toolchain.outputs.components }}
-    - if: inputs.platform == 'windows'
+    - if: inputs.platform == 'windows' && inputs.signing == 'true'
       run: cargo install trusted-signing-cli
       shell: bash
       env:
