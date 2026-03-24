@@ -1,9 +1,10 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Sets up the Windows development environment for Char.
+    Sets up the Windows development environment for Char (no admin rights required).
 .DESCRIPTION
-    Installs Rust (MSVC), Node.js 22, pnpm, and project dependencies.
+    Installs MinGW-w64, Rust (GNU), fnm, Node.js 22, pnpm, and project dependencies.
+    All tools install into the user profile; no administrator privileges needed.
     Run once after cloning the repository.
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\scripts\setup-windows.ps1
@@ -15,6 +16,8 @@ $ErrorActionPreference = "Stop"
 $REPO_ROOT = Split-Path $PSScriptRoot -Parent
 $RUST_VERSION = "1.94.0"
 $NODE_VERSION = "22"
+$LOCAL_BIN = "$HOME\.local\bin"
+$MINGW_DIR = "$HOME\.local\mingw64"
 
 function Write-Step {
     param([string]$Message)
@@ -36,76 +39,85 @@ function Test-Command {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
-# ── Winget ──────────────────────────────────────────────────────────────────
-Write-Step "Checking winget"
-if (-not (Test-Command "winget")) {
-    Write-Error "winget not found. Install App Installer from the Microsoft Store, then re-run this script."
-    exit 1
-}
-Write-Ok "winget available"
+New-Item -ItemType Directory -Force -Path $LOCAL_BIN | Out-Null
 
 # ── WebView2 ─────────────────────────────────────────────────────────────────
 Write-Step "WebView2 Runtime"
 $webview2 = Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" -ErrorAction SilentlyContinue
 if ($null -eq $webview2) {
-    Write-Host "    Installing WebView2 Runtime..."
-    $installer = Join-Path $env:TEMP "MicrosoftEdgeWebview2Setup.exe"
-    Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile $installer
-    Start-Process -FilePath $installer -ArgumentList "/silent /install" -Wait
-    Remove-Item $installer -Force
-    Write-Ok "WebView2 Runtime installed"
+    $webview2 = Get-ItemProperty -Path "HKCU:\Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" -ErrorAction SilentlyContinue
+}
+if ($null -eq $webview2) {
+    Write-Host "    WebView2 not found. On Windows 10/11 it is usually pre-installed." -ForegroundColor Yellow
+    Write-Host "    If the app fails to start, download the Evergreen Runtime from:" -ForegroundColor Yellow
+    Write-Host "    https://developer.microsoft.com/microsoft-edge/webview2/" -ForegroundColor Yellow
 } else {
     Write-Skip "WebView2 Runtime"
 }
 
-# ── Visual C++ Build Tools ────────────────────────────────────────────────────
-Write-Step "Visual C++ Build Tools"
-$vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-$hasMSVC = $false
-if (Test-Path $vsWhere) {
-    $vsInstall = & $vsWhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
-    $hasMSVC = ($vsInstall -ne $null) -and ($vsInstall.Trim() -ne "")
-}
-if (-not $hasMSVC) {
-    Write-Host "    Installing Visual C++ Build Tools (this may take a few minutes)..."
-    winget install --id Microsoft.VisualStudio.2022.BuildTools --silent --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-    $exitCode = $LASTEXITCODE
-    # 1602 = already installing / user interaction issue; 0 and 3010 = success (3010 = reboot needed)
-    if ($exitCode -ne 0 -and $exitCode -ne 3010 -and $exitCode -ne 1602) {
-        Write-Host "    WARN: winget exited with code $exitCode - check manually if MSVC is installed" -ForegroundColor Yellow
-    } else {
-        Write-Ok "Visual C++ Build Tools installed"
+# ── MinGW-w64 (portable C++ toolchain, no admin needed) ──────────────────────
+Write-Step "MinGW-w64 (C++ toolchain)"
+$gccExe = "$MINGW_DIR\bin\gcc.exe"
+if (-not (Test-Path $gccExe)) {
+    Write-Host "    Fetching latest WinLibs release info..."
+    $release = Invoke-RestMethod "https://api.github.com/repos/brechtsanders/winlibs_mingw/releases/latest"
+    $asset = $release.assets | Where-Object { $_.name -match "^winlibs-x86_64-posix-seh-gcc-.*ucrt.*\.zip$" } | Select-Object -First 1
+    if ($null -eq $asset) {
+        Write-Error "Could not find MinGW-w64 zip in latest WinLibs release."
+        exit 1
     }
+    Write-Host "    Downloading $($asset.name)..."
+    $zipPath = Join-Path $env:TEMP $asset.name
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
+    Write-Host "    Extracting to $HOME\.local\ ..."
+    Expand-Archive -LiteralPath $zipPath -DestinationPath "$HOME\.local" -Force
+    try { Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue } catch {}
+    Write-Ok "MinGW-w64 installed at $MINGW_DIR"
 } else {
-    Write-Skip "Visual C++ Build Tools"
+    Write-Skip "MinGW-w64"
 }
+$env:PATH = "$MINGW_DIR\bin;$env:PATH"
 
-# ── Rust ─────────────────────────────────────────────────────────────────────
+# ── Rust toolchain (GNU, no MSVC needed) ─────────────────────────────────────
 Write-Step "Rust toolchain"
 if (-not (Test-Command "rustup")) {
     Write-Host "    Installing Rust via rustup-init..."
     $rustupInit = Join-Path $env:TEMP "rustup-init.exe"
     Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile $rustupInit
-    & $rustupInit -y --default-toolchain "$RUST_VERSION" --default-host x86_64-pc-windows-msvc --component rust-analyzer,rustfmt,clippy
+    & $rustupInit -y --default-toolchain "$RUST_VERSION" --default-host x86_64-pc-windows-gnu --component rust-analyzer,rustfmt,clippy
     try { Remove-Item -LiteralPath $rustupInit -Force -ErrorAction SilentlyContinue } catch {}
     $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
     Write-Ok "Rust $RUST_VERSION installed"
 } else {
     Write-Skip "rustup"
-    Write-Host "    Ensuring toolchain $RUST_VERSION with MSVC target..."
-    rustup toolchain install "$RUST_VERSION" --target x86_64-pc-windows-msvc --component rust-analyzer,rustfmt,clippy
-    rustup default "$RUST_VERSION"
+    Write-Host "    Ensuring toolchain $RUST_VERSION-x86_64-pc-windows-gnu..."
+    rustup toolchain install "$RUST_VERSION-x86_64-pc-windows-gnu" --component rust-analyzer,rustfmt,clippy
+    rustup default "$RUST_VERSION-x86_64-pc-windows-gnu"
     Write-Ok "Rust toolchain up to date"
 }
 
-# verify MSVC target
 $targets = rustup target list --installed
-if ($targets -notcontains "x86_64-pc-windows-msvc") {
-    rustup target add x86_64-pc-windows-msvc
-    Write-Ok "Target x86_64-pc-windows-msvc added"
+if ($targets -notcontains "x86_64-pc-windows-gnu") {
+    rustup target add x86_64-pc-windows-gnu
+    Write-Ok "Target x86_64-pc-windows-gnu added"
 } else {
-    Write-Skip "Target x86_64-pc-windows-msvc"
+    Write-Skip "Target x86_64-pc-windows-gnu"
 }
+
+# ── fnm (portable Node version manager) ──────────────────────────────────────
+Write-Step "fnm (Node version manager)"
+$fnmExe = "$LOCAL_BIN\fnm.exe"
+if (-not (Test-Path $fnmExe)) {
+    Write-Host "    Downloading fnm..."
+    $fnmZip = Join-Path $env:TEMP "fnm-windows.zip"
+    Invoke-WebRequest -Uri "https://github.com/Schniz/fnm/releases/latest/download/fnm-windows.zip" -OutFile $fnmZip
+    Expand-Archive -LiteralPath $fnmZip -DestinationPath $LOCAL_BIN -Force
+    try { Remove-Item -LiteralPath $fnmZip -Force -ErrorAction SilentlyContinue } catch {}
+    Write-Ok "fnm installed"
+} else {
+    Write-Skip "fnm"
+}
+$env:PATH = "$LOCAL_BIN;$env:PATH"
 
 # ── Node.js ───────────────────────────────────────────────────────────────────
 Write-Step "Node.js $NODE_VERSION"
@@ -115,10 +127,10 @@ if (Test-Command "node") {
     if ([int]$currentNode -ge [int]$NODE_VERSION) { $nodeOk = $true }
 }
 if (-not $nodeOk) {
-    Write-Host "    Installing Node.js $NODE_VERSION via winget..."
-    winget install --id OpenJS.NodeJS.LTS --silent
-    $env:PATH = "$env:ProgramFiles\nodejs;$env:PATH"
-    Write-Ok "Node.js installed"
+    Write-Host "    Installing Node.js $NODE_VERSION via fnm..."
+    & $fnmExe install $NODE_VERSION
+    & $fnmExe env --shell powershell | Out-String | Invoke-Expression
+    Write-Ok "Node.js $(node --version) installed"
 } else {
     Write-Skip "Node.js $(node --version)"
 }
@@ -144,8 +156,12 @@ Write-Ok "pnpm install done"
 Write-Host ""
 Write-Host "Setup complete." -ForegroundColor Green
 Write-Host ""
+Write-Host "To make tools available in every new terminal, add this to your" -ForegroundColor White
+Write-Host "PowerShell profile (run: notepad `$PROFILE):" -ForegroundColor White
+Write-Host ""
+Write-Host "  `$env:PATH = `"$MINGW_DIR\bin;$LOCAL_BIN;`$env:USERPROFILE\.cargo\bin;`$env:PATH`"" -ForegroundColor Yellow
+Write-Host "  fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression" -ForegroundColor Yellow
+Write-Host ""
 Write-Host "Next step: open a new terminal and run:" -ForegroundColor White
 Write-Host "  .\scripts\dev-windows.ps1" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "NOTE: If this is your first run, close and reopen your terminal" -ForegroundColor DarkYellow
-Write-Host "      so that PATH changes (Rust, Node) take effect." -ForegroundColor DarkYellow
