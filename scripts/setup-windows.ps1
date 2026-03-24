@@ -107,6 +107,43 @@ if ($targets -notcontains "x86_64-pc-windows-gnu") {
     Write-Skip "Target x86_64-pc-windows-gnu"
 }
 
+# ── ONNX Runtime 1.22.0 (MinGW import library) ───────────────────────────────
+# ort-sys 2.0.0-rc.10 requires ORT 1.22.0 but only ships prebuilt binaries for
+# MSVC targets.  We download the MSVC build and convert it to a MinGW import
+# library (.dll.a) using gendef + dlltool from the MinGW-w64 installed above.
+Write-Step "ONNX Runtime 1.22.0 (MinGW import library)"
+$ORT_DIR = "$HOME\.local\onnxruntime"
+$ORT_IMPORT_LIB = "$ORT_DIR\lib\libonnxruntime.dll.a"
+
+if (-not (Test-Path $ORT_IMPORT_LIB)) {
+    Write-Host "    Downloading ONNX Runtime 1.22.0 (MSVC prebuilt)..."
+    $ortTgz = Join-Path $env:TEMP "ort-msvc.tgz"
+    Invoke-WebRequest -Uri "https://cdn.pyke.io/0/pyke:ort-rs/ms@1.22.0/x86_64-pc-windows-msvc.tgz" -OutFile $ortTgz
+    Write-Host "    Extracting..."
+    New-Item -ItemType Directory -Force -Path $ORT_DIR | Out-Null
+    tar -xzf "$ortTgz" -C "$ORT_DIR"
+    try { Remove-Item -LiteralPath $ortTgz -Force -ErrorAction SilentlyContinue } catch {}
+
+    # Locate onnxruntime.dll inside the extracted tree (handles any top-level dir)
+    $dllPath = Get-ChildItem -Path $ORT_DIR -Filter "onnxruntime.dll" -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -First 1 -ExpandProperty FullName
+    if (-not $dllPath) {
+        Write-Error "onnxruntime.dll not found in $ORT_DIR after extraction."
+        exit 1
+    }
+    $ortLibDir = Split-Path $dllPath -Parent
+
+    Write-Host "    Creating MinGW import library (gendef + dlltool)..."
+    Push-Location $ortLibDir
+    gendef onnxruntime.dll
+    dlltool -D onnxruntime.dll -d onnxruntime.def -l libonnxruntime.dll.a
+    try { Remove-Item -Force onnxruntime.def -ErrorAction SilentlyContinue } catch {}
+    Pop-Location
+    Write-Ok "ONNX Runtime import library: $ortLibDir\libonnxruntime.dll.a"
+} else {
+    Write-Skip "ONNX Runtime MinGW import library"
+}
+
 # ── fnm (portable Node version manager) ──────────────────────────────────────
 Write-Step "fnm (Node version manager)"
 $fnmExe = "$LOCAL_BIN\fnm.exe"

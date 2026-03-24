@@ -19,6 +19,14 @@ $MINGW_DIR = "$HOME\.local\mingw64"
 # Ensure tools installed by setup-windows.ps1 are on PATH
 $env:PATH = "$MINGW_DIR\bin;$LOCAL_BIN;$env:USERPROFILE\.cargo\bin;$env:PATH"
 
+# ONNX Runtime: point ort-sys to our pre-converted MinGW import library.
+# ORT_PREFER_DYNAMIC_LINK prevents ort-sys from looking for a static .lib.
+# Adding the lib dir to PATH makes onnxruntime.dll findable at runtime.
+$ORT_DIR = "$HOME\.local\onnxruntime"
+$env:ORT_LIB_LOCATION = $ORT_DIR
+$env:ORT_PREFER_DYNAMIC_LINK = "1"
+$env:PATH = "$ORT_DIR\lib;$env:PATH"
+
 # libsql-ffi build script calls `cp --no-preserve=mode,ownership -R`.
 # Git for Windows ships a GNU cp.exe in usr\bin, but only adds cmd\ to PATH by
 # default.  Find the usr\bin directory and prepend it so Cargo sees a real cp.
@@ -90,6 +98,11 @@ if ($targets -notcontains "x86_64-pc-windows-gnu") {
     Write-Fail "Rust target x86_64-pc-windows-gnu not installed. Run .\scripts\setup-windows.ps1 first."
 }
 Write-Host "    target  x86_64-pc-windows-gnu OK"
+
+if (-not (Test-Path "$ORT_DIR\lib\libonnxruntime.dll.a")) {
+    Write-Fail "ONNX Runtime MinGW import library missing. Run .\scripts\setup-windows.ps1 first."
+}
+Write-Host "    ort     $ORT_DIR\lib\libonnxruntime.dll.a"
 
 if (-not (Test-Path (Join-Path $REPO_ROOT "node_modules"))) {
     Write-Fail "node_modules missing. Run .\scripts\setup-windows.ps1 first (or: pnpm install --frozen-lockfile)."
