@@ -83,6 +83,9 @@ Write-Host "    Features:  dev"
 Write-Host ""
 Write-Host "Press Ctrl+C to stop." -ForegroundColor DarkGray
 Write-Host ""
+Write-Host "Note: Windows may show a Firewall prompt for the Tauri binary." -ForegroundColor DarkGray
+Write-Host "      You can safely dismiss it -- localhost traffic is never blocked." -ForegroundColor DarkGray
+Write-Host ""
 
 Push-Location $REPO_ROOT
 pnpm -F "@hypr/desktop" tauri:dev

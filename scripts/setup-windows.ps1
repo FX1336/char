@@ -157,6 +157,13 @@ pnpm install --frozen-lockfile
 Pop-Location
 Write-Ok "pnpm install done"
 
+# ── Build workspace packages that ship compiled output ────────────────────────
+Write-Step "Building @hypr/ui (CSS)"
+Push-Location $REPO_ROOT
+pnpm -F "@hypr/ui" build
+Pop-Location
+Write-Ok "@hypr/ui built"
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Setup complete." -ForegroundColor Green
