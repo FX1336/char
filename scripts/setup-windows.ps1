@@ -72,7 +72,7 @@ if (-not $hasMSVC) {
     $exitCode = $LASTEXITCODE
     # 1602 = already installing / user interaction issue; 0 and 3010 = success (3010 = reboot needed)
     if ($exitCode -ne 0 -and $exitCode -ne 3010 -and $exitCode -ne 1602) {
-        Write-Host "    WARN: winget exited with code $exitCode — check manually if MSVC is installed" -ForegroundColor Yellow
+        Write-Host "    WARN: winget exited with code $exitCode - check manually if MSVC is installed" -ForegroundColor Yellow
     } else {
         Write-Ok "Visual C++ Build Tools installed"
     }
