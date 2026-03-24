@@ -19,6 +19,27 @@ $MINGW_DIR = "$HOME\.local\mingw64"
 # Ensure tools installed by setup-windows.ps1 are on PATH
 $env:PATH = "$MINGW_DIR\bin;$LOCAL_BIN;$env:USERPROFILE\.cargo\bin;$env:PATH"
 
+# libsql-ffi build script calls `cp --no-preserve=mode,ownership -R`.
+# Git for Windows ships a GNU cp.exe in usr\bin, but only adds cmd\ to PATH by
+# default.  Find the usr\bin directory and prepend it so Cargo sees a real cp.
+$gitCpDir = $null
+$gitExe = Get-Command git -ErrorAction SilentlyContinue
+if ($gitExe) {
+    # git.exe lives in ..\cmd\git.exe or ..\bin\git.exe relative to usr\bin
+    $gitRoot = $gitExe.Source
+    foreach ($rel in @("..\..\usr\bin", "..\usr\bin")) {
+        $candidate = [IO.Path]::GetFullPath((Join-Path (Split-Path $gitRoot) $rel))
+        if (Test-Path "$candidate\cp.exe") { $gitCpDir = $candidate; break }
+    }
+}
+if ($gitCpDir) {
+    $env:PATH = "$gitCpDir;$env:PATH"
+} else {
+    Write-Host "Warning: GNU cp not found via Git for Windows." -ForegroundColor Yellow
+    Write-Host "         If the build fails on libsql-ffi, install Git for Windows" -ForegroundColor Yellow
+    Write-Host "         or run: winget install Git.Git" -ForegroundColor Yellow
+}
+
 # Activate the fnm-managed Node version if fnm is available
 $fnmExe = "$LOCAL_BIN\fnm.exe"
 if (Test-Path $fnmExe) {
@@ -74,22 +95,6 @@ if (-not (Test-Path (Join-Path $REPO_ROOT "node_modules"))) {
     Write-Fail "node_modules missing. Run .\scripts\setup-windows.ps1 first (or: pnpm install --frozen-lockfile)."
 }
 Write-Host "    deps    node_modules present"
-
-# ── Cargo-Registry-Schreibschutz aufheben (libsql-ffi cmake-Build) ───────────
-# libsql-ffi kompiliert SQLite3MultipleCiphers via cmake direkt im Registry-
-# Quellverzeichnis. Cargo setzt dort READ_ONLY; das fuehrt zu code=5 (Zugriff
-# verweigert). Wir entfernen das Attribut gezielt fuer dieses Crate.
-$libsqlFfiDir = "$env:USERPROFILE\.cargo\registry\src"
-if (Test-Path $libsqlFfiDir) {
-    Get-ChildItem -Path $libsqlFfiDir -Recurse -Filter "libsql-ffi-*" -Directory `
-        -ErrorAction SilentlyContinue |
-    ForEach-Object {
-        Get-ChildItem -Path $_.FullName -Recurse -ErrorAction SilentlyContinue |
-            ForEach-Object {
-                $_.Attributes = $_.Attributes -band (-bnot [System.IO.FileAttributes]::ReadOnly)
-            }
-    }
-}
 
 # ── Start dev server ─────────────────────────────────────────────────────────
 Write-Step "Starting Char (dev mode)"
