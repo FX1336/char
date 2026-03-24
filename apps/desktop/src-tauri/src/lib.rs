@@ -164,7 +164,10 @@ pub async fn main() {
             }
             #[cfg(not(target_os = "macos"))]
             {
-                tauri_plugin_autostart::init(Some(vec!["--background"]))
+                tauri_plugin_autostart::init(
+                    tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                    Some(vec!["--background"]),
+                )
             }
         })
         .plugin(tauri_plugin_updater2::init());
