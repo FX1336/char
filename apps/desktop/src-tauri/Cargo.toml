@@ -20,7 +20,7 @@ crate-type = ["staticlib", "rlib"]
 tauri-build = { workspace = true, features = [] }
 
 [dependencies]
-tauri = { workspace = true, features = ["specta", "protocol-asset"] }
+tauri = { workspace = true, features = ["specta", "protocol-asset", "macos-private-api"] }
 
 tauri-plugin-analytics = { workspace = true }
 tauri-plugin-audio-priority = { workspace = true }
