@@ -20,7 +20,7 @@ crate-type = ["staticlib", "rlib"]
 tauri-build = { workspace = true, features = [] }
 
 [dependencies]
-tauri = { workspace = true, features = ["specta", "macos-private-api", "protocol-asset"] }
+tauri = { workspace = true, features = ["specta", "protocol-asset"] }
 
 tauri-plugin-analytics = { workspace = true }
 tauri-plugin-audio-priority = { workspace = true }
@@ -108,5 +108,6 @@ devtools = ["tauri/devtools"]
 automation = ["tauri-plugin-automation"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
+tauri = { workspace = true, features = ["macos-private-api"] }
 tauri-plugin-automation = { version = "0.1", optional = true }
 hypr-intercept = { workspace = true }
