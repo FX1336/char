@@ -83,7 +83,7 @@ export function Body() {
 
 function Header({ tabs }: { tabs: Tab[] }) {
   const { leftsidebar } = useShell();
-  const isLinux = platform() === "linux";
+  const isNonMac = platform() !== "macos";
   const notifications = useNotifications();
   const currentTab = useTabs((state) => state.currentTab);
   const isOnboarding = currentTab?.type === "onboarding";
@@ -160,10 +160,10 @@ function Header({ tabs }: { tabs: Tab[] }) {
       data-tauri-drag-region
       className={cn([
         "flex h-9 w-full items-center",
-        isSidebarHidden && (isLinux ? "pl-3" : "pl-20"),
+        isSidebarHidden && (isNonMac ? "pl-3" : "pl-20"),
       ])}
     >
-      {isSidebarHidden && isLinux && <TrafficLights className="mr-2" />}
+      {isSidebarHidden && isNonMac && <TrafficLights className="mr-2" />}
       {!leftsidebar.expanded && !isOnboarding && (
         <div className="relative">
           <Tooltip>

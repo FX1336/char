@@ -31,7 +31,7 @@ export function LeftSidebar() {
   const { leftsidebar } = useShell();
   const { query } = useSearch();
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
-  const isLinux = platform() === "linux";
+  const isNonMac = platform() !== "macos";
 
   const { data: showDevtoolButton = false } = useQuery({
     queryKey: ["show_devtool"],
@@ -47,11 +47,11 @@ export function LeftSidebar() {
         className={cn([
           "flex flex-row items-center",
           "h-9 w-full py-1",
-          isLinux ? "justify-between pl-3" : "justify-end pl-20",
+          isNonMac ? "justify-between pl-3" : "justify-end pl-20",
           "shrink-0",
         ])}
       >
-        {isLinux && <TrafficLights />}
+        {isNonMac && <TrafficLights />}
         <div className="flex items-center">
           {showDevtoolButton && (
             <Button

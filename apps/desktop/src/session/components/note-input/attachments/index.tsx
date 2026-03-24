@@ -32,7 +32,11 @@ export type LinkAttachment = {
 export type Attachment = ImageAttachment | LinkAttachment;
 
 const REVEAL_IMAGE_LABEL =
-  platform() === "macos" ? "Reveal in Finder" : "Reveal in File Manager";
+  platform() === "macos"
+    ? "Reveal in Finder"
+    : platform() === "windows"
+      ? "Reveal in Explorer"
+      : "Reveal in File Manager";
 
 function AttachmentCard({
   attachment,

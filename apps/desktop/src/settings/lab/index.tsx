@@ -87,6 +87,9 @@ function DownloadButtons() {
       }
       return `https://desktop2.hyprnote.com/download/latest/appimage-x86_64?channel=${channel}`;
     }
+    if (platformName === "windows") {
+      return `https://desktop2.hyprnote.com/download/latest/msi-x86_64?channel=${channel}`;
+    }
     return null;
   };
 
