@@ -92,6 +92,8 @@ if (-not (Test-Command "rustup")) {
     Write-Skip "rustup"
     Write-Host "    Ensuring toolchain $RUST_VERSION-x86_64-pc-windows-gnu..."
     rustup toolchain install "$RUST_VERSION-x86_64-pc-windows-gnu" --component rust-analyzer,rustfmt,clippy
+    # Set default-host so rust-toolchain.toml (channel only) resolves to GNU, not MSVC
+    rustup set default-host x86_64-pc-windows-gnu
     rustup default "$RUST_VERSION-x86_64-pc-windows-gnu"
     Write-Ok "Rust toolchain up to date"
 }
