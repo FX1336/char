@@ -136,7 +136,17 @@ if (-not (Test-Path $ORT_IMPORT_LIB)) {
     Write-Host "    Creating MinGW import library (gendef + dlltool)..."
     Push-Location $ortLibDir
     gendef onnxruntime.dll
+    if ($LASTEXITCODE -ne 0) {
+        Pop-Location
+        Write-Error "gendef failed (exit $LASTEXITCODE). Is MinGW-w64 installed and on PATH?"
+        exit 1
+    }
     dlltool -D onnxruntime.dll -d onnxruntime.def -l libonnxruntime.dll.a
+    if ($LASTEXITCODE -ne 0) {
+        Pop-Location
+        Write-Error "dlltool failed (exit $LASTEXITCODE)."
+        exit 1
+    }
     try { Remove-Item -Force onnxruntime.def -ErrorAction SilentlyContinue } catch {}
     Pop-Location
     Write-Ok "ONNX Runtime import library: $ortLibDir\libonnxruntime.dll.a"
