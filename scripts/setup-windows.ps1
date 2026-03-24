@@ -120,6 +120,8 @@ if (-not (Test-Path $fnmExe)) {
     Write-Skip "fnm"
 }
 $env:PATH = "$LOCAL_BIN;$env:PATH"
+# Activate any already-installed fnm Node so the version check below works
+& $fnmExe env --shell powershell 2>$null | Out-String | Invoke-Expression
 
 # ── Node.js ───────────────────────────────────────────────────────────────────
 Write-Step "Node.js $NODE_VERSION"
