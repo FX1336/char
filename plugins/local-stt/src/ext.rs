@@ -129,7 +129,9 @@ impl<'a, R: Runtime, M: Manager<R>> LocalStt<'a, R, M> {
         let current_info = match server_type {
             #[cfg(target_arch = "aarch64")]
             ServerType::Internal => internal2_health().await,
-            #[cfg(not(target_arch = "aarch64"))]
+            #[cfg(all(not(target_arch = "aarch64"), feature = "whisper-cpp"))]
+            ServerType::Internal => internal_health().await,
+            #[cfg(all(not(target_arch = "aarch64"), not(feature = "whisper-cpp")))]
             ServerType::Internal => None,
             ServerType::External => external_health().await,
         };
@@ -175,7 +177,16 @@ impl<'a, R: Runtime, M: Manager<R>> LocalStt<'a, R, M> {
                     )
                     .await
                 }
-                #[cfg(not(target_arch = "aarch64"))]
+                #[cfg(all(not(target_arch = "aarch64"), feature = "whisper-cpp"))]
+                {
+                    let cache_dir = self.models_dir();
+                    let whisper_model = match model {
+                        LocalModel::Whisper(m) => m,
+                        _ => return Err(crate::Error::UnsupportedModelType),
+                    };
+                    start_internal_server(&supervisor, cache_dir, whisper_model).await
+                }
+                #[cfg(all(not(target_arch = "aarch64"), not(feature = "whisper-cpp")))]
                 Err(crate::Error::UnsupportedModelType)
             }
             ServerType::External => {
@@ -228,7 +239,9 @@ impl<'a, R: Runtime, M: Manager<R>> LocalStt<'a, R, M> {
         let info = match server_type {
             #[cfg(target_arch = "aarch64")]
             ServerType::Internal => internal2_health().await,
-            #[cfg(not(target_arch = "aarch64"))]
+            #[cfg(all(not(target_arch = "aarch64"), feature = "whisper-cpp"))]
+            ServerType::Internal => internal_health().await,
+            #[cfg(all(not(target_arch = "aarch64"), not(feature = "whisper-cpp")))]
             ServerType::Internal => None,
             ServerType::External => external_health().await,
         };

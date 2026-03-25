@@ -234,7 +234,8 @@ impl LocalModel {
         let is_apple_silicon = cfg!(target_arch = "aarch64") && cfg!(target_os = "macos");
 
         match self {
-            LocalModel::Whisper(_) | LocalModel::Am(_) => is_apple_silicon,
+            LocalModel::Whisper(_) => is_apple_silicon || cfg!(target_arch = "x86_64"),
+            LocalModel::Am(_) => is_apple_silicon,
             LocalModel::Cactus(model) => {
                 if model.is_cross_platform() {
                     true

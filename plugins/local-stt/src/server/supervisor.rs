@@ -156,7 +156,11 @@ pub async fn stop_stt_server(
             {
                 vec![INTERNAL2_STT_ACTOR_NAME]
             }
-            #[cfg(not(target_arch = "aarch64"))]
+            #[cfg(all(not(target_arch = "aarch64"), feature = "whisper-cpp"))]
+            {
+                vec![INTERNAL_STT_ACTOR_NAME]
+            }
+            #[cfg(all(not(target_arch = "aarch64"), not(feature = "whisper-cpp")))]
             {
                 vec![]
             }
