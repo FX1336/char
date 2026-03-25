@@ -5,6 +5,7 @@ import {
   limitShift,
   offset,
   shift,
+  size,
   type VirtualElement,
 } from "@floating-ui/dom";
 import { Extension } from "@tiptap/core";
@@ -240,6 +241,14 @@ export const SlashCommand = Extension.create({
                 offset(4),
                 flip(),
                 shift({ limiter: limitShift() }),
+                size({
+                  apply({ availableHeight, elements }) {
+                    Object.assign(elements.floating.style, {
+                      maxHeight: `${Math.min(availableHeight, 320)}px`,
+                      overflowY: "auto",
+                    });
+                  },
+                }),
               ],
             }).then(({ x, y }) => {
               Object.assign(floatingEl.style, {

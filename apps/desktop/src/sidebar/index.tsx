@@ -34,6 +34,7 @@ export function LeftSidebar() {
   const { query } = useSearch();
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
   const isNonMac = platform() !== "macos";
+  const isWindows = platform() === "windows";
 
   const { data: showDevtoolButton = false } = useQuery({
     queryKey: ["show_devtool"],
@@ -53,7 +54,7 @@ export function LeftSidebar() {
           "shrink-0",
         ])}
       >
-        {isNonMac && <TrafficLights />}
+        {isNonMac && !isWindows && <TrafficLights />}
         <div className="flex items-center">
           {showDevtoolButton && (
             <Button
