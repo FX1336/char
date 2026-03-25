@@ -16,6 +16,7 @@ import {
 } from "@hypr/ui/components/ui/tooltip";
 
 import { SearchableFolderSubmenuContent } from "~/session/components/outer-header/folder/searchable-dropdown";
+import { showInFileManagerLabel } from "~/shared/utils";
 
 export function Copy() {
   return (
@@ -80,7 +81,7 @@ export function ShowInFinder({ sessionId }: { sessionId: string }) {
       ) : (
         <Icon icon="ri:finder-line" />
       )}
-      <span>{isPending ? "Opening..." : "Show in Finder"}</span>
+      <span>{isPending ? "Opening..." : showInFileManagerLabel()}</span>
     </DropdownMenuItem>
   );
 }

@@ -23,6 +23,7 @@ import { useIsSessionEnhancing } from "~/session/hooks/useEnhancedNotes";
 import { getSessionEvent } from "~/session/utils";
 import type { MenuItemDef } from "~/shared/hooks/useNativeContextMenu";
 import { InteractiveButton } from "~/shared/ui/interactive-button";
+import { showInFileManagerLabel } from "~/shared/utils";
 import { useIgnoredEvents } from "~/store/tinybase/hooks";
 import {
   captureSessionData,
@@ -434,7 +435,7 @@ const SessionItem = memo(
         },
         {
           id: "show",
-          text: "Show in Finder",
+          text: showInFileManagerLabel(),
           action: handleShowInFinder,
         },
         { separator: true as const },

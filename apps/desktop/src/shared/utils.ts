@@ -5,6 +5,13 @@ import { env } from "~/env";
 
 export const cmdKey = () => (platform() === "macos" ? "⌘" : "Ctrl");
 
+export const showInFileManagerLabel = () =>
+  platform() === "macos"
+    ? "Show in Finder"
+    : platform() === "windows"
+      ? "Show in Explorer"
+      : "Show in File Manager";
+
 // export * from "../shared/config/configure-pro-settings";
 // export * from "~/sidebar/timeline/utils";
 // export * from "~/stt/segment";

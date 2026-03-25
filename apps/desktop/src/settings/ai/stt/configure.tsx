@@ -28,6 +28,7 @@ import { useSttSettings } from "./context";
 import { ProviderId, PROVIDERS } from "./shared";
 
 import { useBillingAccess } from "~/auth/billing";
+import { showInFileManagerLabel } from "~/shared/utils";
 import {
   HyprCloudCTAButton,
   HyprProviderRow,
@@ -413,7 +414,7 @@ function LocalModelAction({
           ])}
         >
           <FolderOpen className="size-4" />
-          <span>Show in Finder</span>
+          <span>{showInFileManagerLabel()}</span>
         </button>
         <button
           onClick={onDelete}

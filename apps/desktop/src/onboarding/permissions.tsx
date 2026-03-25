@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { platform } from "@tauri-apps/plugin-os";
+
 import { type PermissionStatus } from "@hypr/plugin-permissions";
 import { cn } from "@hypr/utils";
 
@@ -32,10 +34,12 @@ function PermissionBlock({
   const isAuthorized = status === "authorized";
   const opensSettings = isAuthorized || status === "denied";
   const title = isAuthorized ? enabledLabel : enableLabel;
+  const settingsLabel =
+    platform() === "macos" ? "System Settings" : "Settings";
   const body = isAuthorized
-    ? "Open settings"
+    ? `Open ${settingsLabel}`
     : opensSettings
-      ? "Open System Settings to finish setup"
+      ? `Open ${settingsLabel} to finish setup`
       : "Allow access to continue";
   const ctaLabel = isAuthorized
     ? "Manage"
