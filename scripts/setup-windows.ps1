@@ -134,8 +134,9 @@ $libclangDst = "$LLVM_DIR\bin\libclang.dll"
 if (-not (Test-Path $libclangDst)) {
     Write-Host "    Fetching libclang package info from PyPI..."
     $pypi = Invoke-RestMethod "https://pypi.org/pypi/libclang/json"
-    $latestVer = $pypi.info.version
-    $wheel = $pypi.releases[$latestVer] |
+    # $pypi.urls is the flat array of download URLs for the latest version —
+    # avoids PSObject string-indexing issues with $pypi.releases[$ver] on PS 5.x.
+    $wheel = $pypi.urls |
         Where-Object { $_.filename -match "win_amd64\.whl$" } |
         Select-Object -First 1
     if ($null -eq $wheel) {
