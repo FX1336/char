@@ -1,6 +1,9 @@
 import { getIdentifier } from "@tauri-apps/api/app";
+import { platform } from "@tauri-apps/plugin-os";
 
 import { env } from "~/env";
+
+export const cmdKey = () => (platform() === "macos" ? "⌘" : "Ctrl");
 
 // export * from "../shared/config/configure-pro-settings";
 // export * from "~/sidebar/timeline/utils";

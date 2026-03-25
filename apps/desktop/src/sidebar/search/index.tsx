@@ -8,6 +8,7 @@ import { cn } from "@hypr/utils";
 import { useSearchKeyboard } from "./use-search-keyboard";
 
 import { useSearch } from "~/search/contexts/ui";
+import { cmdKey } from "~/shared/utils";
 
 export function SidebarSearchInput() {
   const { query, setQuery, inputRef, setFocusImpl, isSearching, isIndexing } =
@@ -68,7 +69,7 @@ export function SidebarSearchInput() {
       )}
       {showShortcut && (
         <div className="absolute top-1 right-4">
-          <Kbd>⌘ K</Kbd>
+          <Kbd>{cmdKey()} K</Kbd>
         </div>
       )}
     </div>

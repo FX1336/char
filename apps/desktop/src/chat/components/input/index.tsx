@@ -7,6 +7,8 @@ import type { PlaceholderFunction } from "@hypr/tiptap/shared";
 import { Button } from "@hypr/ui/components/ui/button";
 import { cn } from "@hypr/utils";
 
+import { cmdKey } from "~/shared/utils";
+
 import {
   useAutoFocusEditor,
   useDraftState,
@@ -114,7 +116,7 @@ export function ChatMessageInput({
                   disabled ? "text-neutral-300" : "text-stone-400",
                 ])}
               >
-                ⌘ ↩
+                {cmdKey()} ↩
               </span>
             </button>
           )}

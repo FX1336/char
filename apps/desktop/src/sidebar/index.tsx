@@ -12,6 +12,8 @@ import {
 } from "@hypr/ui/components/ui/tooltip";
 import { cn } from "@hypr/utils";
 
+import { cmdKey } from "~/shared/utils";
+
 import { ProfileSection } from "./profile";
 import { SidebarSearchInput } from "./search";
 import { TimelineView } from "./timeline";
@@ -74,7 +76,7 @@ export function LeftSidebar() {
             </TooltipTrigger>
             <TooltipContent side="bottom" className="flex items-center gap-2">
               <span>Toggle sidebar</span>
-              <Kbd className="animate-kbd-press">⌘ \</Kbd>
+              <Kbd className="animate-kbd-press">{cmdKey()} \</Kbd>
             </TooltipContent>
           </Tooltip>
         </div>

@@ -23,6 +23,7 @@ import { MenuItem } from "./shared";
 
 import { useAuth } from "~/auth";
 import { useAutoCloser } from "~/shared/hooks/useAutoCloser";
+import { cmdKey } from "~/shared/utils";
 import * as main from "~/store/tinybase/store/main";
 import { useTabs } from "~/store/zustand/tabs";
 
@@ -162,37 +163,37 @@ export function ProfileSection({ onExpandChange }: ProfileSectionProps = {}) {
       icon: FolderOpenIcon,
       label: "Folders",
       onClick: handleClickFolders,
-      badge: <Kbd className={kbdClass}>⌘ ⇧ L</Kbd>,
+      badge: <Kbd className={kbdClass}>{cmdKey()} ⇧ L</Kbd>,
     },
     {
       icon: UsersIcon,
       label: "Contacts",
       onClick: handleClickContacts,
-      badge: <Kbd className={kbdClass}>⌘ ⇧ O</Kbd>,
+      badge: <Kbd className={kbdClass}>{cmdKey()} ⇧ O</Kbd>,
     },
     {
       icon: CalendarIcon,
       label: "Calendar",
       onClick: handleClickCalendar,
-      badge: <Kbd className={kbdClass}>⌘ ⇧ C</Kbd>,
+      badge: <Kbd className={kbdClass}>{cmdKey()} ⇧ C</Kbd>,
     },
     {
       icon: SearchIcon,
       label: "Advanced Search",
       onClick: handleClickAdvancedSearch,
-      badge: <Kbd className={kbdClass}>⌘ ⇧ F</Kbd>,
+      badge: <Kbd className={kbdClass}>{cmdKey()} ⇧ F</Kbd>,
     },
     {
       icon: SparklesIcon,
       label: "AI Settings",
       onClick: handleClickAI,
-      badge: <Kbd className={kbdClass}>⌘ ⇧ ,</Kbd>,
+      badge: <Kbd className={kbdClass}>{cmdKey()} ⇧ ,</Kbd>,
     },
     {
       icon: SettingsIcon,
       label: "App Settings",
       onClick: handleClickSettings,
-      badge: <Kbd className={kbdClass}>⌘ ,</Kbd>,
+      badge: <Kbd className={kbdClass}>{cmdKey()} ,</Kbd>,
     },
     {
       icon: CircleHelp,

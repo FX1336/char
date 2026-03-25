@@ -10,6 +10,7 @@ import { OpenNoteDialog } from "./open-note-dialog";
 
 import { StandardTabWrapper } from "~/shared/main";
 import { type TabItem, TabItemBase } from "~/shared/tabs";
+import { cmdKey } from "~/shared/utils";
 import { type Tab, useTabs } from "~/store/zustand/tabs";
 
 export const TabItemEmpty: TabItem<Extract<Tab, { type: "empty" }>> = ({
@@ -88,37 +89,37 @@ function EmptyView() {
   return (
     <div className="mb-12 flex h-full flex-col items-center justify-center gap-6 text-neutral-600">
       <div className="flex min-w-[280px] flex-col gap-1 text-center">
-        <ActionItem label="New Note" shortcut={["⌘", "N"]} onClick={newNote} />
+        <ActionItem label="New Note" shortcut={[cmdKey(), "N"]} onClick={newNote} />
         <ActionItem
           label="Open Note"
-          shortcut={["⌘", "O"]}
+          shortcut={[cmdKey(), "O"]}
           onClick={() => setOpenNoteDialogOpen(true)}
         />
         <div className="my-1 h-px bg-neutral-200" />
         <ActionItem
           label="Contacts"
-          shortcut={["⌘", "⇧", "O"]}
+          shortcut={[cmdKey(), "⇧", "O"]}
           onClick={openContacts}
         />
         <ActionItem
           label="Calendar"
-          shortcut={["⌘", "⇧", "C"]}
+          shortcut={[cmdKey(), "⇧", "C"]}
           onClick={openCalendar}
         />
         <ActionItem
           label="Advanced Search"
-          shortcut={["⌘", "⇧", "F"]}
+          shortcut={[cmdKey(), "⇧", "F"]}
           onClick={openAdvancedSearch}
         />
         <div className="my-1 h-px bg-neutral-200" />
         <ActionItem
           label="AI Settings"
-          shortcut={["⌘", "⇧", ","]}
+          shortcut={[cmdKey(), "⇧", ","]}
           onClick={openAiSettings}
         />
         <ActionItem
           label="App Settings"
-          shortcut={["⌘", ","]}
+          shortcut={[cmdKey(), ","]}
           onClick={openSettings}
         />
       </div>

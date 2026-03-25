@@ -13,6 +13,7 @@ import { useCmdKeyPressed } from "@hypr/ui/hooks/use-cmd-key-pressed";
 import { cn } from "@hypr/utils";
 
 import { InteractiveButton } from "~/shared/ui/interactive-button";
+import { cmdKey } from "~/shared/utils";
 import { type Tab } from "~/store/zustand/tabs";
 
 type TabItemProps<T extends Tab = Tab> = { tab: T; tabIndex?: number } & {
@@ -294,7 +295,7 @@ export function TabItemBase({
         </div>
         {showShortcut && (
           <div className="pointer-events-none absolute top-0.75 right-2">
-            <Kbd>⌘ {tabIndex}</Kbd>
+            <Kbd>{cmdKey()} {tabIndex}</Kbd>
           </div>
         )}
       </InteractiveButton>
@@ -335,7 +336,7 @@ export function TabItemBase({
                   "group-active:translate-y-0.5 group-active:shadow-none",
                 ])}
               >
-                ⌘ W
+                {cmdKey()} W
               </Kbd>
             </Button>
           </div>

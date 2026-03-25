@@ -18,6 +18,7 @@ import {
 import { cn } from "@hypr/utils";
 
 import { useTranscriptSearch } from "./context";
+import { cmdKey } from "~/shared/utils";
 
 function ToggleButton({
   active,
@@ -187,7 +188,7 @@ export function SearchBar() {
             tooltip={
               <>
                 <span>Replace</span>
-                <Kbd className="animate-kbd-press">⌘ H</Kbd>
+                <Kbd className="animate-kbd-press">{cmdKey()} H</Kbd>
               </>
             }
           >
@@ -264,7 +265,7 @@ export function SearchBar() {
               tooltip={
                 <>
                   <span>Replace all</span>
-                  <Kbd className="animate-kbd-press">⌘ ↵</Kbd>
+                  <Kbd className="animate-kbd-press">{cmdKey()} ↵</Kbd>
                 </>
               }
             >

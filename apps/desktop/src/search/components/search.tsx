@@ -7,6 +7,7 @@ import { useCmdKeyPressed } from "@hypr/ui/hooks/use-cmd-key-pressed";
 import { cn } from "@hypr/utils";
 
 import { useSearch } from "~/search/contexts/ui";
+import { cmdKey } from "~/shared/utils";
 import { useTabs } from "~/store/zustand/tabs";
 
 export function Search({
@@ -232,7 +233,7 @@ function ExpandedSearch({ onBlur }: { onBlur?: () => void }) {
         )}
         {showShortcut && (
           <div className="absolute top-1 right-2">
-            <Kbd>⌘ K</Kbd>
+            <Kbd>{cmdKey()} K</Kbd>
           </div>
         )}
       </div>

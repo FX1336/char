@@ -50,6 +50,7 @@ import { TabContentSettings, TabItemSettings } from "~/settings";
 import { useNativeContextMenu } from "~/shared/hooks/useNativeContextMenu";
 import { NotificationBadge } from "~/shared/ui/notification-badge";
 import { TrafficLights } from "~/shared/ui/traffic-lights";
+import { cmdKey } from "~/shared/utils";
 import { Update } from "~/sidebar/update";
 import { type Tab, uniqueIdfromTab, useTabs } from "~/store/zustand/tabs";
 import { useListener } from "~/stt/contexts";
@@ -179,7 +180,7 @@ function Header({ tabs }: { tabs: Tab[] }) {
             </TooltipTrigger>
             <TooltipContent side="bottom" className="flex items-center gap-2">
               <span>Toggle sidebar</span>
-              <Kbd className="animate-kbd-press">⌘ \</Kbd>
+              <Kbd className="animate-kbd-press">{cmdKey()} \</Kbd>
             </TooltipContent>
           </Tooltip>
           <NotificationBadge show={notifications.shouldShowBadge} />
