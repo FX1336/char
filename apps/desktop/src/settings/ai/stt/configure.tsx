@@ -1,6 +1,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
+  CheckCircle2,
   Download,
   FolderOpen,
   HelpCircle,
@@ -226,6 +227,7 @@ function CactusRow({
 }) {
   const handleSelectModel = useSafeSelectModel();
   const { shouldHighlightDownload } = useSttSettings();
+  const currentModel = settings.UI.useValue("current_stt_model", settings.STORE_ID);
 
   const {
     progress,
@@ -253,11 +255,13 @@ function CactusRow({
 
       <LocalModelAction
         isDownloaded={isDownloaded}
+        isSelected={currentModel === model}
         showProgress={showProgress}
         progress={progress}
         hasError={hasError}
         highlight={shouldHighlightDownload}
         onOpen={handleOpen}
+        onSelect={() => handleSelectModel(model)}
         onDownload={handleDownload}
         onCancel={handleCancel}
         onDelete={handleDelete}
@@ -379,21 +383,25 @@ function HyprProviderCloudRow() {
 
 function LocalModelAction({
   isDownloaded,
+  isSelected,
   showProgress,
   progress,
   hasError,
   highlight,
   onOpen,
+  onSelect,
   onDownload,
   onCancel,
   onDelete,
 }: {
   isDownloaded: boolean;
+  isSelected?: boolean;
   showProgress: boolean;
   progress: number;
   hasError: boolean;
   highlight: boolean;
   onOpen: () => void;
+  onSelect?: () => void;
   onDownload: () => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -403,18 +411,45 @@ function LocalModelAction({
   if (isDownloaded) {
     return (
       <div className="flex items-center gap-1.5">
+        {isSelected
+          ? (
+            <div
+              className={cn([
+                "h-8.5 rounded-full px-4 text-center font-mono text-xs",
+                "bg-linear-to-t from-neutral-800 to-neutral-700 text-white",
+                "flex items-center justify-center gap-1.5",
+              ])}
+            >
+              <CheckCircle2 className="size-4" />
+              <span>Active</span>
+            </div>
+          )
+          : (
+            <button
+              onClick={onSelect}
+              className={cn([
+                "h-8.5 rounded-full px-4 text-center font-mono text-xs",
+                "bg-linear-to-t from-neutral-200 to-neutral-100 text-neutral-900",
+                "shadow-xs hover:scale-[102%] hover:shadow-md active:scale-[98%]",
+                "transition-all duration-150",
+                "flex items-center justify-center gap-1.5",
+              ])}
+            >
+              <span>Use</span>
+            </button>
+          )}
         <button
           onClick={onOpen}
+          title={showInFileManagerLabel()}
           className={cn([
-            "h-8.5 rounded-full px-4 text-center font-mono text-xs",
-            "bg-linear-to-t from-neutral-200 to-neutral-100 text-neutral-900",
+            "size-8.5 rounded-full",
+            "bg-linear-to-t from-neutral-200 to-neutral-100 text-neutral-600",
             "shadow-xs hover:shadow-md",
             "transition-all duration-150",
-            "flex items-center justify-center gap-1.5",
+            "flex items-center justify-center",
           ])}
         >
           <FolderOpen className="size-4" />
-          <span>{showInFileManagerLabel()}</span>
         </button>
         <button
           onClick={onDelete}
@@ -517,6 +552,7 @@ function HyprProviderLocalRow({
 }) {
   const handleSelectModel = useSafeSelectModel();
   const { shouldHighlightDownload } = useSttSettings();
+  const currentModel = settings.UI.useValue("current_stt_model", settings.STORE_ID);
 
   const {
     progress,
@@ -545,11 +581,13 @@ function HyprProviderLocalRow({
 
       <LocalModelAction
         isDownloaded={isDownloaded}
+        isSelected={currentModel === model}
         showProgress={showProgress}
         progress={progress}
         hasError={hasError}
         highlight={shouldHighlightDownload}
         onOpen={handleOpen}
+        onSelect={() => handleSelectModel(model)}
         onDownload={handleDownload}
         onCancel={handleCancel}
         onDelete={handleDelete}
