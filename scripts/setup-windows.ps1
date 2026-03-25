@@ -91,7 +91,8 @@ $env:PATH = "$MINGW_DIR\bin;$env:PATH"
 #     and accepts /utf-8 via MSVC-compatibility mode
 Write-Step "llvm-mingw (Clang toolchain + libclang for bindgen)"
 $libclangDll = "$LLVM_DIR\bin\libclang.dll"
-if (-not (Test-Path $libclangDll)) {
+$llvmCrossClang = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang.exe"
+if (-not (Test-Path $libclangDll) -or -not (Test-Path $llvmCrossClang)) {
     Write-Host "    Fetching latest llvm-mingw release info..."
     $release = Invoke-RestMethod "https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest"
     $asset = $release.assets |
