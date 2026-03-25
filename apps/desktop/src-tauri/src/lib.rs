@@ -8,7 +8,6 @@ mod supervisor;
 use ext::*;
 use store::*;
 
-use tauri::Manager;
 use tauri_plugin_permissions::{Permission, PermissionsPluginExt};
 use tauri_plugin_windows::{AppWindow, WindowsPluginExt};
 
@@ -154,22 +153,10 @@ pub async fn main() {
                     .map(|ctx| ctx.supervisor.get_cell()),
             },
         ))
-        .plugin({
-            #[cfg(target_os = "macos")]
-            {
-                tauri_plugin_autostart::init(
-                    tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-                    Some(vec!["--background"]),
-                )
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                tauri_plugin_autostart::init(
-                    tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-                    Some(vec!["--background"]),
-                )
-            }
-        })
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--background"]),
+        ))
         .plugin(tauri_plugin_updater2::init());
 
     if let Some(client) = sentry_client.as_ref() {
