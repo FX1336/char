@@ -299,7 +299,7 @@ function Header({ tabs }: { tabs: Tab[] }) {
 
       <div
         data-tauri-drag-region
-        className="flex h-full flex-1 items-center justify-between"
+        className="flex h-full flex-1 items-center"
       >
         <Button
           onClick={isOnboarding ? undefined : handleNewEmptyTab}
@@ -319,8 +319,8 @@ function Header({ tabs }: { tabs: Tab[] }) {
           <HeaderListenButton />
           <Update />
         </div>
-        {isWindows && <WindowsControls />}
       </div>
+      {isWindows && <WindowsControls />}
     </div>
   );
 }

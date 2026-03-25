@@ -25,7 +25,7 @@ export function WindowsControls() {
   const onClose = () => getCurrentWebviewWindow().close();
 
   return (
-    <div className="flex h-full items-stretch" data-tauri-drag-region="false">
+    <div className="flex h-full shrink-0 items-stretch" data-tauri-drag-region="false">
       <button
         type="button"
         onClick={() => void onMinimize()}
