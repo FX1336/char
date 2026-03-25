@@ -15,9 +15,13 @@ $ErrorActionPreference = "Stop"
 $REPO_ROOT = Split-Path $PSScriptRoot -Parent
 $LOCAL_BIN = "$HOME\.local\bin"
 $MINGW_DIR = "$HOME\.local\mingw64"
+$LLVM_DIR = "$HOME\.local\llvm"
 
 # Ensure tools installed by setup-windows.ps1 are on PATH
 $env:PATH = "$MINGW_DIR\bin;$LOCAL_BIN;$env:USERPROFILE\.cargo\bin;$env:PATH"
+
+# LLVM: bindgen (used by whisper-rs-sys, knf-rs-sys) needs libclang.dll at build time.
+$env:LIBCLANG_PATH = "$LLVM_DIR\bin"
 
 # ONNX Runtime: point ort-sys to our pre-converted MinGW import library.
 # ORT_PREFER_DYNAMIC_LINK prevents ort-sys from looking for a static .lib.
@@ -103,6 +107,11 @@ if (-not (Test-Path "$ORT_DIR\lib\libonnxruntime.dll.a")) {
     Write-Fail "ONNX Runtime MinGW import library missing. Run .\scripts\setup-windows.ps1 first."
 }
 Write-Host "    ort     $ORT_DIR\lib\libonnxruntime.dll.a"
+
+if (-not (Test-Path "$LLVM_DIR\bin\libclang.dll")) {
+    Write-Fail "LLVM libclang.dll not found at $LLVM_DIR\bin. Run .\scripts\setup-windows.ps1 first."
+}
+Write-Host "    libclang  $LLVM_DIR\bin\libclang.dll"
 
 if (-not (Test-Path (Join-Path $REPO_ROOT "node_modules"))) {
     Write-Fail "node_modules missing. Run .\scripts\setup-windows.ps1 first (or: pnpm install --frozen-lockfile)."

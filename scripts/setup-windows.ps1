@@ -18,6 +18,8 @@ $RUST_VERSION = "1.94.0"
 $NODE_VERSION = "22"
 $LOCAL_BIN = "$HOME\.local\bin"
 $MINGW_DIR = "$HOME\.local\mingw64"
+$LLVM_DIR = "$HOME\.local\llvm"
+$LLVM_VERSION = "19.1.7"
 
 function Write-Step {
     param([string]$Message)
@@ -78,6 +80,29 @@ if (-not (Test-Path $gccExe) -or -not (Test-Path $crt2)) {
     Write-Skip "MinGW-w64"
 }
 $env:PATH = "$MINGW_DIR\bin;$env:PATH"
+
+# ── LLVM / libclang (required by bindgen in whisper-rs-sys / knf-rs-sys) ─────
+Write-Step "LLVM $LLVM_VERSION (libclang for bindgen)"
+$libclangDll = "$LLVM_DIR\bin\libclang.dll"
+if (-not (Test-Path $libclangDll)) {
+    $llvmTar = Join-Path $env:TEMP "llvm-win64.tar.xz"
+    $llvmUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/clang+llvm-$LLVM_VERSION-x86_64-pc-windows-msvc.tar.xz"
+    Write-Host "    Downloading LLVM $LLVM_VERSION (~100 MB, needed once)..."
+    Invoke-WebRequest -Uri $llvmUrl -OutFile $llvmTar
+    New-Item -ItemType Directory -Force -Path $LLVM_DIR | Out-Null
+    Write-Host "    Extracting (tar.exe, built into Windows 10+)..."
+    # --strip-components=1 removes the top-level versioned directory
+    & tar -xf $llvmTar -C $LLVM_DIR --strip-components=1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "tar extraction failed. Windows 10 build 17063 or later is required for built-in tar."
+        exit 1
+    }
+    try { Remove-Item -LiteralPath $llvmTar -Force -ErrorAction SilentlyContinue } catch {}
+    Write-Ok "LLVM installed at $LLVM_DIR"
+} else {
+    Write-Skip "LLVM / libclang"
+}
+$env:LIBCLANG_PATH = "$LLVM_DIR\bin"
 
 # ── Rust toolchain (GNU, no MSVC needed) ─────────────────────────────────────
 Write-Step "Rust toolchain"
@@ -231,6 +256,7 @@ Write-Host "To make tools available in every new terminal, add this to your" -Fo
 Write-Host "PowerShell profile (run: notepad `$PROFILE):" -ForegroundColor White
 Write-Host ""
 Write-Host "  `$env:PATH = `"$MINGW_DIR\bin;$LOCAL_BIN;`$env:USERPROFILE\.cargo\bin;`$env:PATH`"" -ForegroundColor Yellow
+Write-Host "  `$env:LIBCLANG_PATH = `"$LLVM_DIR\bin`"" -ForegroundColor Yellow
 Write-Host "  fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Next step: open a new terminal and run:" -ForegroundColor White
