@@ -64,7 +64,25 @@ $env:ORT_LIB_LOCATION = $ORT_DIR
 $env:ORT_PREFER_DYNAMIC_LINK = "1"
 $env:PATH = "$ORT_DIR\lib;$env:PATH"
 
-# libsql-ffi build script calls `cp --no-preserve=mode,ownership -R`.
+# Clear stale cmake caches that have gcc.exe as CMAKE_C_COMPILER.
+# Happens when the toolchain file is first introduced: cmake re-uses a cached
+# gcc-based configuration even though the toolchain file sets clang.  Deleting
+# the cmake build sub-directory forces a fresh configure on the next cargo build.
+$cargoBuildDir = Join-Path $REPO_ROOT "apps\desktop\src-tauri\target\debug\build"
+if (Test-Path -LiteralPath $cargoBuildDir) {
+    Get-ChildItem -LiteralPath $cargoBuildDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $cmakeCache = Join-Path $_.FullName "out\build\CMakeCache.txt"
+        if (Test-Path -LiteralPath $cmakeCache) {
+            $cacheText = Get-Content -LiteralPath $cmakeCache -Raw -ErrorAction SilentlyContinue
+            if ($cacheText -match "CMAKE_C_COMPILER:FILEPATH=.*gcc") {
+                Write-Host "    Clearing stale cmake cache (gcc → clang): $($_.Name.Substring(0, [Math]::Min(40, $_.Name.Length)))..."
+                Remove-Item -LiteralPath (Split-Path $cmakeCache -Parent) -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
+
 # Git for Windows ships a GNU cp.exe in usr\bin, but only adds cmd\ to PATH by
 # default.  Find the usr\bin directory and prepend it so Cargo sees a real cp.
 $gitCpDir = $null
