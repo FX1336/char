@@ -18,8 +18,10 @@ $RUST_VERSION = "1.94.0"
 $NODE_VERSION = "22"
 $LOCAL_BIN = "$HOME\.local\bin"
 $MINGW_DIR = "$HOME\.local\mingw64"
+# llvm-mingw: unified Clang + MinGW-w64 toolchain.
+# Provides libclang.dll (for bindgen) and clang/clang++ with MinGW headers
+# (fixes 'stdint.h not found' and '/utf-8 linker input' errors in whisper-rs-sys).
 $LLVM_DIR = "$HOME\.local\llvm"
-$LLVM_VERSION = "19.1.7"
 
 function Write-Step {
     param([string]$Message)
@@ -81,26 +83,46 @@ if (-not (Test-Path $gccExe) -or -not (Test-Path $crt2)) {
 }
 $env:PATH = "$MINGW_DIR\bin;$env:PATH"
 
-# ── LLVM / libclang (required by bindgen in whisper-rs-sys / knf-rs-sys) ─────
-Write-Step "LLVM $LLVM_VERSION (libclang for bindgen)"
+# ── llvm-mingw (Clang + MinGW headers + libclang for bindgen) ────────────────
+# Uses llvm-mingw instead of the MSVC LLVM build because:
+#   - MSVC LLVM clang doesn't know MinGW headers → stdint.h/stdbool.h not found
+#   - MinGW gcc doesn't understand /utf-8 (MSVC flag in whisper.cpp CMakeLists)
+#   - llvm-mingw's clang targets x86_64-w64-mingw32, knows its own headers,
+#     and accepts /utf-8 via MSVC-compatibility mode
+Write-Step "llvm-mingw (Clang toolchain + libclang for bindgen)"
 $libclangDll = "$LLVM_DIR\bin\libclang.dll"
 if (-not (Test-Path $libclangDll)) {
-    $llvmTar = Join-Path $env:TEMP "llvm-win64.tar.xz"
-    $llvmUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/clang+llvm-$LLVM_VERSION-x86_64-pc-windows-msvc.tar.xz"
-    Write-Host "    Downloading LLVM $LLVM_VERSION (~100 MB, needed once)..."
-    Invoke-WebRequest -Uri $llvmUrl -OutFile $llvmTar
-    New-Item -ItemType Directory -Force -Path $LLVM_DIR | Out-Null
-    Write-Host "    Extracting (tar.exe, built into Windows 10+)..."
-    # --strip-components=1 removes the top-level versioned directory
-    & tar -xf $llvmTar -C $LLVM_DIR --strip-components=1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "tar extraction failed. Windows 10 build 17063 or later is required for built-in tar."
+    Write-Host "    Fetching latest llvm-mingw release info..."
+    $release = Invoke-RestMethod "https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest"
+    $asset = $release.assets |
+        Where-Object { $_.name -match "^llvm-mingw-.*-ucrt-x86_64\.zip$" } |
+        Select-Object -First 1
+    if ($null -eq $asset) {
+        Write-Error "Could not find llvm-mingw ucrt-x86_64 zip in latest release."
         exit 1
     }
-    try { Remove-Item -LiteralPath $llvmTar -Force -ErrorAction SilentlyContinue } catch {}
-    Write-Ok "LLVM installed at $LLVM_DIR"
+    Write-Host "    Downloading $($asset.name) (~200 MB, needed once)..."
+    $zipPath = Join-Path $env:TEMP $asset.name
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
+
+    Write-Host "    Extracting..."
+    $tempExtract = Join-Path $env:TEMP "llvm-mingw-extract"
+    if (Test-Path $tempExtract) { Remove-Item -Recurse -Force $tempExtract }
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $tempExtract -Force
+    try { Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue } catch {}
+
+    $innerDir = Get-ChildItem -Path $tempExtract -Directory | Select-Object -First 1
+    if (-not $innerDir) {
+        Write-Error "Unexpected archive structure in llvm-mingw zip."
+        exit 1
+    }
+    if (Test-Path $LLVM_DIR) { Remove-Item -Recurse -Force $LLVM_DIR }
+    Move-Item -Path $innerDir.FullName -Destination $LLVM_DIR
+    try { Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue } catch {}
+
+    Write-Ok "llvm-mingw installed at $LLVM_DIR"
 } else {
-    Write-Skip "LLVM / libclang"
+    Write-Skip "llvm-mingw"
 }
 $env:LIBCLANG_PATH = "$LLVM_DIR\bin"
 
@@ -257,6 +279,8 @@ Write-Host "PowerShell profile (run: notepad `$PROFILE):" -ForegroundColor White
 Write-Host ""
 Write-Host "  `$env:PATH = `"$MINGW_DIR\bin;$LOCAL_BIN;`$env:USERPROFILE\.cargo\bin;`$env:PATH`"" -ForegroundColor Yellow
 Write-Host "  `$env:LIBCLANG_PATH = `"$LLVM_DIR\bin`"" -ForegroundColor Yellow
+Write-Host "  `$env:CC  = `"$LLVM_DIR\bin\x86_64-w64-mingw32-clang.exe`"" -ForegroundColor Yellow
+Write-Host "  `$env:CXX = `"$LLVM_DIR\bin\x86_64-w64-mingw32-clang++.exe`"" -ForegroundColor Yellow
 Write-Host "  fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Next step: open a new terminal and run:" -ForegroundColor White
