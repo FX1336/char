@@ -2,6 +2,7 @@ import { Icon } from "@iconify-icon/react";
 import { useMutation } from "@tanstack/react-query";
 import { FolderIcon, Link2Icon, Loader2Icon } from "lucide-react";
 
+import { platform } from "@tauri-apps/plugin-os";
 import { commands as fsSyncCommands } from "@hypr/plugin-fs-sync";
 import { commands as openerCommands } from "@hypr/plugin-opener2";
 import {
@@ -79,7 +80,15 @@ export function ShowInFinder({ sessionId }: { sessionId: string }) {
       {isPending ? (
         <Loader2Icon className="animate-spin" />
       ) : (
-        <Icon icon="ri:finder-line" />
+        <Icon
+          icon={
+            platform() === "macos"
+              ? "ri:finder-line"
+              : platform() === "windows"
+                ? "ri:folder-open-line"
+                : "ri:file-manager-line"
+          }
+        />
       )}
       <span>{isPending ? "Opening..." : showInFileManagerLabel()}</span>
     </DropdownMenuItem>
