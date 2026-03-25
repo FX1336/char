@@ -28,7 +28,6 @@ import { useNetwork } from "~/contexts/network";
 import {
   ActionableTooltipContent,
   RecordingIcon,
-  useHasTranscript,
 } from "~/session/components/shared";
 import { useTabs } from "~/store/zustand/tabs";
 import { useListener } from "~/stt/contexts";
@@ -51,15 +50,12 @@ function useHeaderListenVisible() {
   const liveStatus = useListener((state) => state.live.status);
   const loading = useListener((state) => state.live.loading);
 
-  const sessionId = currentTab?.type === "sessions" ? currentTab.id : "";
-  const hasTranscript = useHasTranscript(sessionId);
-
   const isRecording = liveStatus === "active" || liveStatus === "finalizing";
 
   if (isRecording) return true;
   if (loading) return false;
   if (currentTab?.type === "empty") return true;
-  if (currentTab?.type === "sessions" && hasTranscript) return true;
+  if (currentTab?.type === "sessions") return true;
 
   return false;
 }
