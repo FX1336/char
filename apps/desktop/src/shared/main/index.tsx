@@ -50,6 +50,7 @@ import { TabContentSettings, TabItemSettings } from "~/settings";
 import { useNativeContextMenu } from "~/shared/hooks/useNativeContextMenu";
 import { NotificationBadge } from "~/shared/ui/notification-badge";
 import { TrafficLights } from "~/shared/ui/traffic-lights";
+import { WindowsControls } from "~/shared/ui/windows-controls";
 import { cmdKey } from "~/shared/utils";
 import { Update } from "~/sidebar/update";
 import { type Tab, uniqueIdfromTab, useTabs } from "~/store/zustand/tabs";
@@ -85,6 +86,7 @@ export function Body() {
 function Header({ tabs }: { tabs: Tab[] }) {
   const { leftsidebar } = useShell();
   const isNonMac = platform() !== "macos";
+  const isWindows = platform() === "windows";
   const notifications = useNotifications();
   const currentTab = useTabs((state) => state.currentTab);
   const isOnboarding = currentTab?.type === "onboarding";
@@ -164,7 +166,9 @@ function Header({ tabs }: { tabs: Tab[] }) {
         isSidebarHidden && (isNonMac ? "pl-3" : "pl-20"),
       ])}
     >
-      {isSidebarHidden && isNonMac && <TrafficLights className="mr-2" />}
+      {isSidebarHidden && isNonMac && !isWindows && (
+        <TrafficLights className="mr-2" />
+      )}
       {!leftsidebar.expanded && !isOnboarding && (
         <div className="relative">
           <Tooltip>
@@ -315,6 +319,7 @@ function Header({ tabs }: { tabs: Tab[] }) {
           <HeaderListenButton />
           <Update />
         </div>
+        {isWindows && <WindowsControls />}
       </div>
     </div>
   );
