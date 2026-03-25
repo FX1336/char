@@ -147,9 +147,13 @@ if (-not (Test-Path $libclangDst)) {
     $whlPath = Join-Path ([System.IO.Path]::GetTempPath()) $wheel.filename
     Invoke-WebRequest -Uri $wheel.url -OutFile $whlPath
     Write-Host "    Extracting libclang.dll..."
+    # Expand-Archive rejects non-.zip extensions; rename to .zip first.
+    $zipPath2 = [System.IO.Path]::ChangeExtension($whlPath, ".zip")
+    Copy-Item -LiteralPath $whlPath -Destination $zipPath2 -Force
     $whlExtract = Join-Path ([System.IO.Path]::GetTempPath()) "libclang-wheel"
     try { if (Test-Path -LiteralPath $whlExtract) { Remove-Item -LiteralPath $whlExtract -Recurse -Force } } catch {}
-    Expand-Archive -LiteralPath $whlPath -DestinationPath $whlExtract -Force
+    Expand-Archive -LiteralPath $zipPath2 -DestinationPath $whlExtract -Force
+    try { Remove-Item -LiteralPath $zipPath2 -Force -ErrorAction SilentlyContinue } catch {}
     $dll = Get-ChildItem -LiteralPath $whlExtract -Filter "libclang.dll" -Recurse | Select-Object -First 1
     if (-not $dll) {
         Write-Error "libclang.dll not found inside the wheel archive."
