@@ -115,7 +115,7 @@ if (-not (Test-Path "$ORT_DIR\lib\libonnxruntime.dll.a")) {
 }
 Write-Host "    ort     $ORT_DIR\lib\libonnxruntime.dll.a"
 
-if (-not (Test-Path "$LLVM_DIR\bin\libclang.dll")) {
+if (-not (Test-Path "$LLVM_DIR\bin\x86_64-w64-mingw32-clang.exe")) {
     Write-Fail "llvm-mingw not found at $LLVM_DIR. Run .\scripts\setup-windows.ps1 first."
 }
 Write-Host "    llvm-mingw  $LLVM_DIR\bin\x86_64-w64-mingw32-clang.exe"
