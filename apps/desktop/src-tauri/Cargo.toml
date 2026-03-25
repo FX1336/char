@@ -108,6 +108,5 @@ devtools = ["tauri/devtools"]
 automation = ["tauri-plugin-automation"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
-tauri = { workspace = true, features = ["macos-private-api"] }
 tauri-plugin-automation = { version = "0.1", optional = true }
 hypr-intercept = { workspace = true }

@@ -1,6 +1,8 @@
 import { AlertCircleIcon, ArrowRightIcon, CheckIcon } from "lucide-react";
 import { useState } from "react";
 
+import { platform } from "@tauri-apps/plugin-os";
+
 import type { PermissionStatus } from "@hypr/plugin-permissions";
 import { Button } from "@hypr/ui/components/ui/button";
 import { cn } from "@hypr/utils";
@@ -131,6 +133,7 @@ export function Permissions() {
   const mic = usePermission("microphone");
   const systemAudio = usePermission("systemAudio");
   const accessibility = usePermission("accessibility");
+  const isMacos = platform() === "macos";
 
   return (
     <div>
@@ -154,15 +157,17 @@ export function Permissions() {
           onReset={systemAudio.reset}
           onOpen={systemAudio.open}
         />
-        <PermissionRow
-          title="Accessibility"
-          description="Required to detect meeting apps and sync mute status"
-          status={accessibility.status}
-          isPending={accessibility.isPending}
-          onRequest={accessibility.request}
-          onReset={accessibility.reset}
-          onOpen={accessibility.open}
-        />
+        {isMacos && (
+          <PermissionRow
+            title="Accessibility"
+            description="Required to detect meeting apps and sync mute status"
+            status={accessibility.status}
+            isPending={accessibility.isPending}
+            onRequest={accessibility.request}
+            onReset={accessibility.reset}
+            onOpen={accessibility.open}
+          />
+        )}
       </div>
     </div>
   );
