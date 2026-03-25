@@ -21,26 +21,40 @@ $LLVM_DIR = "$HOME\.local\llvm"
 # MinGW bin must be here for the Rust GNU linker (x86_64-w64-mingw32-gcc, ld, etc.).
 # llvm-mingw is NOT added to PATH: its x86_64-w64-mingw32-gcc wrapper uses lld which
 # cannot find MinGW's libgcc/libgcc_eh.  llvm-mingw tools are referenced via explicit
-# full paths in CC/CXX/CMAKE_C_COMPILER below.
+# full paths in CC/CXX and the cmake toolchain file below.
 $env:PATH = "$MINGW_DIR\bin;$LOCAL_BIN;$env:USERPROFILE\.cargo\bin;$env:PATH"
 
-# Use Clang from llvm-mingw for C/C++ compilation.  It targets x86_64-w64-mingw32,
-# knows its own MinGW headers (fixes stdint.h/stdbool.h), and accepts MSVC flags like
-# /utf-8 (used by whisper.cpp CMakeLists) via MSVC-compatibility mode.
+# Use Clang from llvm-mingw as the C/C++ compiler for cc-rs (ring, etc.).
 $env:LIBCLANG_PATH = "$LLVM_DIR\bin"   # libclang.dll lives here (from PyPI libclang wheel)
 $env:CC  = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang.exe"
 $env:CXX = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang++.exe"
-# cmake-rs reads CMAKE_C/CXX_COMPILER and passes them as -DCMAKE_C_COMPILER to cmake.
-# Without this, cmake's MinGW generator auto-detects gcc.exe from PATH and rejects the
-# clang-specific --target= flags that cc-rs adds to CMAKE_C_FLAGS.
+# cmake toolchain file: cmake-rs reads CMAKE_TOOLCHAIN_FILE and passes it as
+# -DCMAKE_TOOLCHAIN_FILE to every cmake invocation (whisper-rs-sys, libsql-ffi, etc.).
+# The file (apps/desktop/src-tauri/cmake/windows-gnu.cmake):
+#   1. Sets CMAKE_C/CXX_COMPILER from env — cmake-rs intentionally skips this on
+#      non-MSVC Windows, so cmake would otherwise auto-detect gcc.exe from PATH.
+#   2. Strips /utf-8 from CMAKE_CXX_FLAGS — whisper-rs-sys adds it unconditionally
+#      on Windows but clang in GNU driver mode treats it as a filename.
 $env:CMAKE_C_COMPILER   = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang.exe"
 $env:CMAKE_CXX_COMPILER = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang++.exe"
-# Tell bindgen (via libclang.dll) to target MinGW and where to find the system headers.
-# The sysroot points to llvm-mingw's x86_64-w64-mingw32 directory which contains
-# the MinGW headers (stdint.h, stdbool.h, etc.) that the MSVC-origin libclang.dll
-# would otherwise not find.
-$llvmSysroot = ($LLVM_DIR -replace '\\', '/') + "/x86_64-w64-mingw32"
-$env:BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_gnu = "--target=x86_64-w64-mingw32 --sysroot=$llvmSysroot"
+$toolchainFile = ($REPO_ROOT -replace '\\', '/') + "/apps/desktop/src-tauri/cmake/windows-gnu.cmake"
+$env:CMAKE_TOOLCHAIN_FILE = $toolchainFile
+
+# Bindgen (libclang.dll from PyPI libclang 18.x) needs to find clang built-in
+# headers (stdbool.h, stdint.h) and MinGW system headers.  The PyPI libclang is a
+# different LLVM version from llvm-mingw, so its default resource-dir lookup fails.
+# Point it explicitly at llvm-mingw's resource dir and MinGW include path.
+$clangResourceDir = Get-ChildItem -Path "$LLVM_DIR\lib\clang" -Directory -ErrorAction SilentlyContinue |
+    Sort-Object Name | Select-Object -Last 1
+$llvmSlash = $LLVM_DIR -replace '\\', '/'
+if ($clangResourceDir) {
+    $resDir = ($clangResourceDir.FullName -replace '\\', '/')
+    $env:BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_gnu = `
+        "--target=x86_64-w64-mingw32 -resource-dir $resDir -isystem $llvmSlash/x86_64-w64-mingw32/include"
+} else {
+    $env:BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_gnu = `
+        "--target=x86_64-w64-mingw32 --sysroot=$llvmSlash/x86_64-w64-mingw32"
+}
 
 # ONNX Runtime: point ort-sys to our pre-converted MinGW import library.
 # ORT_PREFER_DYNAMIC_LINK prevents ort-sys from looking for a static .lib.
