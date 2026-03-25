@@ -18,9 +18,11 @@ $MINGW_DIR = "$HOME\.local\mingw64"
 $LLVM_DIR = "$HOME\.local\llvm"
 
 # Ensure tools installed by setup-windows.ps1 are on PATH.
-# llvm-mingw bin comes first so x86_64-w64-mingw32-clang is found by name before
-# MinGW's gcc.  MinGW gcc is still on PATH for the Rust GNU linker.
-$env:PATH = "$LLVM_DIR\bin;$MINGW_DIR\bin;$LOCAL_BIN;$env:USERPROFILE\.cargo\bin;$env:PATH"
+# MinGW bin must be here for the Rust GNU linker (x86_64-w64-mingw32-gcc, ld, etc.).
+# llvm-mingw is NOT added to PATH: its x86_64-w64-mingw32-gcc wrapper uses lld which
+# cannot find MinGW's libgcc/libgcc_eh.  llvm-mingw tools are referenced via explicit
+# full paths in CC/CXX/CMAKE_C_COMPILER below.
+$env:PATH = "$MINGW_DIR\bin;$LOCAL_BIN;$env:USERPROFILE\.cargo\bin;$env:PATH"
 
 # Use Clang from llvm-mingw for C/C++ compilation.  It targets x86_64-w64-mingw32,
 # knows its own MinGW headers (fixes stdint.h/stdbool.h), and accepts MSVC flags like
