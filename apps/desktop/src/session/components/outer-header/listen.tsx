@@ -17,9 +17,8 @@ import { useStartListening } from "~/stt/useStartListening";
 
 export function ListenButton({ sessionId }: { sessionId: string }) {
   const { shouldRender } = useListenButtonState(sessionId);
-  const hasTranscript = useHasTranscript(sessionId);
 
-  if (shouldRender && hasTranscript) {
+  if (shouldRender) {
     return <StartButton sessionId={sessionId} />;
   }
 
@@ -28,12 +27,15 @@ export function ListenButton({ sessionId }: { sessionId: string }) {
 
 function StartButton({ sessionId }: { sessionId: string }) {
   const { isDisabled, warningMessage } = useListenButtonState(sessionId);
+  const hasTranscript = useHasTranscript(sessionId);
   const handleClick = useStartListening(sessionId);
   const openNew = useTabs((state) => state.openNew);
 
   const handleConfigureAction = useCallback(() => {
     openNew({ type: "ai", state: { tab: "transcription" } });
   }, [openNew]);
+
+  const label = hasTranscript ? "Resume listening" : "Start listening";
 
   const button = (
     <button
@@ -49,7 +51,7 @@ function StartButton({ sessionId }: { sessionId: string }) {
         "disabled:pointer-events-none disabled:opacity-50",
       ])}
     >
-      <span className="whitespace-nowrap">Resume listening</span>
+      <span className="whitespace-nowrap">{label}</span>
     </button>
   );
 
