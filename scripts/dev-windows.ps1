@@ -64,18 +64,24 @@ $env:ORT_LIB_LOCATION = $ORT_DIR
 $env:ORT_PREFER_DYNAMIC_LINK = "1"
 $env:PATH = "$ORT_DIR\lib;$env:PATH"
 
-# Clear stale cmake caches that have gcc.exe as CMAKE_C_COMPILER.
-# Happens when the toolchain file is first introduced: cmake re-uses a cached
-# gcc-based configuration even though the toolchain file sets clang.  Deleting
-# the cmake build sub-directory forces a fresh configure on the next cargo build.
+# Clear stale cmake caches that would cause build failures:
+#   - C compiler cached as gcc  (toolchain file couldn't override the old cache)
+#   - CXX compiler marked broken (happened when /utf-8 caused clang test to fail)
+# Deleting the cmake build sub-directory forces a fresh configure on next cargo build.
+$clangExe = ($LLVM_DIR -replace '\\', '/') + "/bin/x86_64-w64-mingw32-clang.exe"
 $cargoBuildDir = Join-Path $REPO_ROOT "apps\desktop\src-tauri\target\debug\build"
 if (Test-Path -LiteralPath $cargoBuildDir) {
     Get-ChildItem -LiteralPath $cargoBuildDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $cmakeCache = Join-Path $_.FullName "out\build\CMakeCache.txt"
         if (Test-Path -LiteralPath $cmakeCache) {
             $cacheText = Get-Content -LiteralPath $cmakeCache -Raw -ErrorAction SilentlyContinue
-            if ($cacheText -match "CMAKE_C_COMPILER:FILEPATH=.*gcc") {
-                Write-Host "    Clearing stale cmake cache (gcc → clang): $($_.Name.Substring(0, [Math]::Min(40, $_.Name.Length)))..."
+            $gccCached    = $cacheText -match "CMAKE_C_COMPILER:FILEPATH=.*gcc"
+            $cxxBroken    = $cacheText -match "CMAKE_CXX_COMPILER_WORKS:INTERNAL=(FALSE|0|)"
+            $wrongCompiler = ($cacheText -notmatch [regex]::Escape($clangExe)) -and
+                             ($cacheText -match "CMAKE_C_COMPILER:FILEPATH=")
+            if ($gccCached -or $cxxBroken -or $wrongCompiler) {
+                $label = $_.Name.Substring(0, [Math]::Min(40, $_.Name.Length))
+                Write-Host "    Clearing stale cmake cache: $label..."
                 Remove-Item -LiteralPath (Split-Path $cmakeCache -Parent) -Recurse -Force -ErrorAction SilentlyContinue
             }
         }
