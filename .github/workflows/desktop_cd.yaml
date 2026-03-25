@@ -215,9 +215,90 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
 
+  build-windows:
+    needs: [compute-version, cn-draft]
+    if: ${{ !cancelled() && (needs.cn-draft.result == 'success' || needs.cn-draft.result == 'skipped') }}
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: recursive
+      - run: |
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git fetch --tags --force
+      - run: ./scripts/version.sh "./apps/desktop/src-tauri/tauri.conf.json" "${{ needs.compute-version.outputs.version }}"
+      - uses: ./.github/actions/rust_install
+        with:
+          platform: windows
+      - uses: ./.github/actions/pnpm_install
+      - run: pnpm -F ui build
+      - run: |
+          TAURI_ENV_TARGET_TRIPLE=x86_64-pc-windows-msvc cargo xtask prepare-binaries
+          ./scripts/sidecar.sh "./apps/desktop/${{ env.TAURI_CONF_PATH }}" "binaries/char-chrome-native-host"
+      - run: |
+          FEATURES_FLAG=""
+          if [[ "${{ inputs.channel }}" == "staging" ]]; then
+            FEATURES_FLAG="--features devtools"
+          fi
+          pnpm -F desktop tauri build --target x86_64-pc-windows-msvc --config ${{ env.TAURI_CONF_PATH }} --verbose $FEATURES_FLAG
+        env:
+          CI: false
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACTUS_API_KEY: ${{ secrets.CACTUS_API_KEY }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          OUTLIT_PUBLIC_KEY: ${{ secrets.OUTLIT_PUBLIC_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN_HYPRNOTE_2 }}
+          APP_VERSION: ${{ needs.compute-version.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_APP_URL: "https://char.com"
+          VITE_API_URL: "https://api.char.com"
+          VITE_PRO_PRODUCT_ID: ${{ secrets.VITE_PRO_PRODUCT_ID }}
+          VITE_APP_VERSION: ${{ needs.compute-version.outputs.version }}
+      - if: ${{ inputs.channel != 'staging' }}
+        uses: ./.github/actions/cn_release
+        with:
+          cmd: upload
+          app: ${{ env.CN_APPLICATION }}
+          key: ${{ secrets.CN_API_KEY }}
+          channel: ${{ env.RELEASE_CHANNEL }}
+          framework: tauri
+          working-directory: ./apps/desktop
+      - if: ${{ inputs.channel == 'staging' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyprnote-staging-windows-x86_64
+          path: apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          retention-days: 3
+      - if: ${{ inputs.channel == 'staging' }}
+        run: |
+          TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          NSIS_FILE=$(find "apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/" -name "*.exe" -type f | head -1)
+          FILENAME="hyprnote-staging-${TIMESTAMP}-${COMMIT_HASH}-windows-x86_64.exe"
+          cp "$NSIS_FILE" "$FILENAME"
+          aws s3 cp "$FILENAME" \
+            "s3://hyprnote-build/desktop/staging/$FILENAME" \
+            --endpoint-url ${{ secrets.CLOUDFLARE_R2_ENDPOINT_URL }} \
+            --region auto
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+
   create-tag:
-    if: ${{ inputs.channel != 'staging' && !cancelled() && needs.build-macos.result == 'success' }}
-    needs: [compute-version, build-macos]
+    if: ${{ inputs.channel != 'staging' && !cancelled() && needs.build-macos.result == 'success' && needs.build-windows.result == 'success' }}
+    needs: [compute-version, build-macos, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -231,7 +312,7 @@ jobs:
 
   cn-publish:
     if: ${{ inputs.channel != 'staging' && inputs.publish }}
-    needs: [compute-version, build-macos, create-tag]
+    needs: [compute-version, build-macos, build-windows, create-tag]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -246,8 +327,8 @@ jobs:
           working-directory: ./apps/desktop
 
   release:
-    if: ${{ inputs.channel != 'staging' && inputs.publish && !cancelled() && needs.cn-publish.result == 'success' && needs.build-macos.result == 'success' }}
-    needs: [compute-version, build-macos, cn-publish]
+    if: ${{ inputs.channel != 'staging' && inputs.publish && !cancelled() && needs.cn-publish.result == 'success' && needs.build-macos.result == 'success' && needs.build-windows.result == 'success' }}
+    needs: [compute-version, build-macos, build-windows, cn-publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -275,17 +356,34 @@ jobs:
           platform: dmg-x86_64
           output: hyprnote-macos-x86_64.dmg
           key: ${{ secrets.CN_API_KEY }}
+      - if: ${{ needs.build-windows.result == 'success' }}
+        uses: ./.github/actions/cn_download
+        with:
+          app: ${{ env.CN_APPLICATION }}
+          version: ${{ needs.compute-version.outputs.version }}
+          channel: ${{ env.RELEASE_CHANNEL }}
+          platform: nsis-x86_64
+          output: hyprnote-windows-x86_64.exe
+          key: ${{ secrets.CN_API_KEY }}
       - id: checksums
         uses: ./.github/actions/generate_checksums
         with:
           files: |
             ${{ needs.build-macos.result == 'success' && 'hyprnote-macos-aarch64.dmg' || '' }}
             ${{ needs.build-macos.result == 'success' && 'hyprnote-macos-x86_64.dmg' || '' }}
+            ${{ needs.build-windows.result == 'success' && 'hyprnote-windows-x86_64.exe' || '' }}
       - id: artifacts
         run: |
           ARTIFACTS=""
           if [[ "${{ needs.build-macos.result }}" == "success" ]]; then
             ARTIFACTS="hyprnote-macos-aarch64.dmg,hyprnote-macos-x86_64.dmg"
+          fi
+          if [[ "${{ needs.build-windows.result }}" == "success" ]]; then
+            if [[ -n "$ARTIFACTS" ]]; then
+              ARTIFACTS="$ARTIFACTS,hyprnote-windows-x86_64.exe"
+            else
+              ARTIFACTS="hyprnote-windows-x86_64.exe"
+            fi
           fi
           if [[ -z "$ARTIFACTS" ]]; then
             echo "No artifacts to release" >&2
