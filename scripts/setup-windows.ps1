@@ -102,7 +102,7 @@ if (-not (Test-Path $llvmCrossClang)) {
         exit 1
     }
     Write-Host "    Downloading $($asset.name) (~200 MB, needed once)..."
-    $zipPath = Join-Path $env:TEMP $asset.name
+    $zipPath = Join-Path ([System.IO.Path]::GetTempPath()) $asset.name
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
 
     Write-Host "    Extracting..."
@@ -125,6 +125,42 @@ if (-not (Test-Path $llvmCrossClang)) {
     Write-Skip "llvm-mingw"
 }
 $env:LIBCLANG_PATH = "$LLVM_DIR\bin"
+
+# ── libclang.dll (from PyPI libclang wheel — ~30 MB, no Python needed) ───────
+# llvm-mingw statically links LLVM, so libclang.dll is not included.
+# The PyPI 'libclang' wheel is a plain zip that ships libclang.dll for Windows.
+Write-Step "libclang.dll (for bindgen)"
+$libclangDst = "$LLVM_DIR\bin\libclang.dll"
+if (-not (Test-Path $libclangDst)) {
+    Write-Host "    Fetching libclang package info from PyPI..."
+    $pypi = Invoke-RestMethod "https://pypi.org/pypi/libclang/json"
+    $latestVer = $pypi.info.version
+    $wheel = $pypi.releases[$latestVer] |
+        Where-Object { $_.filename -match "win_amd64\.whl$" } |
+        Select-Object -First 1
+    if ($null -eq $wheel) {
+        Write-Error "Could not find libclang win_amd64 wheel on PyPI."
+        exit 1
+    }
+    Write-Host "    Downloading $($wheel.filename) (~30 MB)..."
+    $whlPath = Join-Path ([System.IO.Path]::GetTempPath()) $wheel.filename
+    Invoke-WebRequest -Uri $wheel.url -OutFile $whlPath
+    Write-Host "    Extracting libclang.dll..."
+    $whlExtract = Join-Path ([System.IO.Path]::GetTempPath()) "libclang-wheel"
+    try { if (Test-Path -LiteralPath $whlExtract) { Remove-Item -LiteralPath $whlExtract -Recurse -Force } } catch {}
+    Expand-Archive -LiteralPath $whlPath -DestinationPath $whlExtract -Force
+    $dll = Get-ChildItem -LiteralPath $whlExtract -Filter "libclang.dll" -Recurse | Select-Object -First 1
+    if (-not $dll) {
+        Write-Error "libclang.dll not found inside the wheel archive."
+        exit 1
+    }
+    Copy-Item -LiteralPath $dll.FullName -Destination "$LLVM_DIR\bin\" -Force
+    try { Remove-Item -LiteralPath $whlExtract -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+    try { Remove-Item -LiteralPath $whlPath -Force -ErrorAction SilentlyContinue } catch {}
+    Write-Ok "libclang.dll installed at $LLVM_DIR\bin"
+} else {
+    Write-Skip "libclang.dll"
+}
 
 # ── Rust toolchain (GNU, no MSVC needed) ─────────────────────────────────────
 Write-Step "Rust toolchain"
