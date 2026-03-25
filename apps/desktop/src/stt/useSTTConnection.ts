@@ -77,7 +77,7 @@ export const useSTTConnection = () => {
       }
 
       return {
-        status: server?.status ?? "loading",
+        status: server?.status ?? "unavailable",
         connection: null,
       };
     },

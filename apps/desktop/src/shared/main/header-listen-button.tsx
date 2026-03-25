@@ -67,6 +67,7 @@ function useHeaderListenState() {
   const localServerStatus = local.data?.status ?? "unavailable";
   const isLocalServerLoading = localServerStatus === "loading";
   const isLocalModelNotDownloaded = localServerStatus === "not_downloaded";
+  const isLocalServerUnavailable = localServerStatus === "unavailable";
   const isOfflineWithCloudModel = !isOnline && !isLocalModel;
 
   const isDisabled =
@@ -80,6 +81,9 @@ function useHeaderListenState() {
     warningMessage = "Selected model is not downloaded.";
   } else if (isLocalServerLoading) {
     warningMessage = "Local STT server is starting up...";
+  } else if (isLocalServerUnavailable && isLocalModel) {
+    warningMessage =
+      "This model is not supported on your platform. Use an Argmax model instead.";
   } else if (isOfflineWithCloudModel) {
     warningMessage = "You're offline. Use on-device models to continue.";
   } else if (!sttConnection) {

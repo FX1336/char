@@ -1,4 +1,5 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
+import { platform } from "@tauri-apps/plugin-os";
 import {
   AlertCircle,
   CheckCircle2,
@@ -110,12 +111,19 @@ function HyprProviderCard({
     staleTime: Infinity,
   });
 
+  const isWindows = platform() === "windows";
+
   const argmaxModels =
     supportedModels.data?.filter((m) => m.model_type === "argmax") ?? [];
-  const whispercppModels =
-    supportedModels.data?.filter((m) => m.model_type === "whispercpp") ?? [];
-  const cactusModels =
-    supportedModels.data?.filter((m) => m.model_type === "cactus") ?? [];
+  // Cactus and WhisperCPP use the internal server which only runs on aarch64 (Apple Silicon).
+  // Hide them on Windows to prevent users from downloading models that won't work.
+  const whispercppModels = isWindows
+    ? []
+    : (supportedModels.data?.filter((m) => m.model_type === "whispercpp") ??
+      []);
+  const cactusModels = isWindows
+    ? []
+    : (supportedModels.data?.filter((m) => m.model_type === "cactus") ?? []);
 
   const hasLocalModels =
     argmaxModels.length > 0 ||
