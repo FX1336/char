@@ -78,12 +78,23 @@ export function ConfigureProviders() {
   );
 }
 
-function ModelGroupLabel({ label }: { label: string }) {
+function ModelGroupLabel({
+  label,
+  unsupported,
+}: {
+  label: string;
+  unsupported?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2 pt-1">
       <span className="shrink-0 text-[10px] font-medium tracking-widest text-neutral-400 uppercase">
         {label}
       </span>
+      {unsupported && (
+        <span className="shrink-0 rounded border border-amber-300 bg-amber-50 px-1.5 text-[10px] text-amber-600">
+          macOS only
+        </span>
+      )}
       <div className="flex-1 border-t border-neutral-200" />
     </div>
   );
@@ -115,15 +126,10 @@ function HyprProviderCard({
 
   const argmaxModels =
     supportedModels.data?.filter((m) => m.model_type === "argmax") ?? [];
-  // Cactus and WhisperCPP use the internal server which only runs on aarch64 (Apple Silicon).
-  // Hide them on Windows to prevent users from downloading models that won't work.
-  const whispercppModels = isWindows
-    ? []
-    : (supportedModels.data?.filter((m) => m.model_type === "whispercpp") ??
-      []);
-  const cactusModels = isWindows
-    ? []
-    : (supportedModels.data?.filter((m) => m.model_type === "cactus") ?? []);
+  const whispercppModels =
+    supportedModels.data?.filter((m) => m.model_type === "whispercpp") ?? [];
+  const cactusModels =
+    supportedModels.data?.filter((m) => m.model_type === "cactus") ?? [];
 
   const hasLocalModels =
     argmaxModels.length > 0 ||
@@ -192,7 +198,7 @@ function HyprProviderCard({
 
               {whispercppModels.length > 0 && (
                 <>
-                  <ModelGroupLabel label="WhisperCPP" />
+                  <ModelGroupLabel label="WhisperCPP" unsupported={isWindows} />
                   {whispercppModels.map((model) => (
                     <HyprProviderLocalRow
                       key={model.key as string}
@@ -206,7 +212,10 @@ function HyprProviderCard({
 
               {cactusModels.length > 0 && (
                 <>
-                  <ModelGroupLabel label="Cactus (Experimental)" />
+                  <ModelGroupLabel
+                    label="Cactus (Experimental)"
+                    unsupported={isWindows}
+                  />
                   {/* <CactusSettings models={cactusModels.map((m) => m.key)} /> */}
 
                   {cactusModels.map((model) => (
