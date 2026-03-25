@@ -72,7 +72,7 @@ if (-not (Test-Path $gccExe) -or -not (Test-Path $crt2)) {
         exit 1
     }
     Write-Host "    Downloading $($asset.name)..."
-    $zipPath = Join-Path $env:TEMP $asset.name
+    $zipPath = Join-Path ([System.IO.Path]::GetTempPath()) $asset.name
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
     Write-Host "    Extracting to $HOME\.local\ ..."
     Expand-Archive -LiteralPath $zipPath -DestinationPath "$HOME\.local" -Force
@@ -107,19 +107,19 @@ if (-not (Test-Path $libclangDll) -or -not (Test-Path $llvmCrossClang)) {
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
 
     Write-Host "    Extracting..."
-    $tempExtract = Join-Path $env:TEMP "llvm-mingw-extract"
-    if (Test-Path $tempExtract) { Remove-Item -Recurse -Force $tempExtract }
+    $tempExtract = Join-Path ([System.IO.Path]::GetTempPath()) "llvm-mingw-extract"
+    try { if (Test-Path -LiteralPath $tempExtract) { Remove-Item -LiteralPath $tempExtract -Recurse -Force } } catch {}
     Expand-Archive -LiteralPath $zipPath -DestinationPath $tempExtract -Force
     try { Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue } catch {}
 
-    $innerDir = Get-ChildItem -Path $tempExtract -Directory | Select-Object -First 1
+    $innerDir = Get-ChildItem -LiteralPath $tempExtract -Directory | Select-Object -First 1
     if (-not $innerDir) {
         Write-Error "Unexpected archive structure in llvm-mingw zip."
         exit 1
     }
-    if (Test-Path $LLVM_DIR) { Remove-Item -Recurse -Force $LLVM_DIR }
-    Move-Item -Path $innerDir.FullName -Destination $LLVM_DIR
-    try { Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue } catch {}
+    if (Test-Path -LiteralPath $LLVM_DIR) { Remove-Item -LiteralPath $LLVM_DIR -Recurse -Force }
+    Move-Item -LiteralPath $innerDir.FullName -Destination $LLVM_DIR
+    try { Remove-Item -LiteralPath $tempExtract -Recurse -Force -ErrorAction SilentlyContinue } catch {}
 
     Write-Ok "llvm-mingw installed at $LLVM_DIR"
 } else {
