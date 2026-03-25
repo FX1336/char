@@ -49,6 +49,21 @@
   color: #a3a3a3;
 }
 
+/* Slash command extras */
+.slash-command-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slash-command-description {
+  font-size: 0.75rem;
+  color: #a3a3a3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Inline mention chip */
 .mention {
   display: inline;

@@ -13,6 +13,7 @@ import * as shared from "../shared";
 import type { ExtensionOptions, FileHandlerConfig } from "../shared/extensions";
 import type { PlaceholderFunction } from "../shared/extensions/placeholder";
 import { isMentionActive, mention, type MentionConfig } from "./mention";
+import { SlashCommand } from "./slash-command";
 
 const safeRequestIdleCallback =
   typeof requestIdleCallback !== "undefined"
@@ -77,6 +78,7 @@ const Editor = forwardRef<{ editor: TiptapEditor | null }, EditorProps>(
           fileHandlerConfig,
           extensionOptions,
         ),
+        SlashCommand,
         ...(mentionConfig ? [mention(mentionConfig)] : []),
       ],
       [
