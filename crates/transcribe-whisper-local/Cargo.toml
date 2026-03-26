@@ -5,8 +5,9 @@ edition = "2024"
 
 [features]
 default = []
+pyannote = ["dep:hypr-pyannote-local"]
 coreml = ["hypr-whisper-local/coreml"]
-directml = ["hypr-pyannote-local/directml"]
+directml = ["pyannote", "hypr-pyannote-local/directml"]
 cuda = ["hypr-whisper-local/cuda"]
 hipblas = ["hypr-whisper-local/hipblas"]
 openblas = ["hypr-whisper-local/openblas"]
@@ -21,7 +22,7 @@ owhisper-client = { workspace = true }
 
 [dependencies]
 hypr-audio-utils = { workspace = true }
-hypr-pyannote-local = { workspace = true }
+hypr-pyannote-local = { workspace = true, optional = true }
 hypr-vad-chunking = { workspace = true }
 hypr-whisper = { workspace = true }
 hypr-whisper-local = { workspace = true }

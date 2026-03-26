@@ -116,6 +116,6 @@ hypr-intercept = { workspace = true }
 [target.'cfg(all(target_os = "windows", target_env = "gnu"))'.dependencies]
 tauri-plugin-local-stt = { workspace = true, features = ["whisper-cpp"] }
 
-# MSVC target (CI, x86_64-pc-windows-msvc): directml enabled via the full ORT release.
+# MSVC target (CI, x86_64-pc-windows-msvc): directml + pyannote enabled via the full ORT release.
 [target.'cfg(all(target_os = "windows", target_env = "msvc"))'.dependencies]
-tauri-plugin-local-stt = { workspace = true, features = ["whisper-cpp", "directml"] }
+tauri-plugin-local-stt = { workspace = true, features = ["whisper-cpp", "directml", "pyannote"] }

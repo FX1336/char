@@ -25,21 +25,47 @@ pub fn process_recorded(
         .build()
         .unwrap();
 
-    let mut segmenter = hypr_pyannote_local::segmentation::Segmenter::new(16000).unwrap();
-    let segments = segmenter.process(&samples, 16000).unwrap();
-
     let mut words = Vec::new();
 
-    for segment in segments {
-        let audio_f32 = hypr_audio_utils::i16_to_f32_samples(&segment.samples);
+    #[cfg(feature = "pyannote")]
+    {
+        let mut segmenter =
+            hypr_pyannote_local::segmentation::Segmenter::new(16000).unwrap();
+        let segments = segmenter.process(&samples, 16000).unwrap();
 
+        for segment in segments {
+            let audio_f32 = hypr_audio_utils::i16_to_f32_samples(&segment.samples);
+
+            let whisper_segments = model.transcribe(&audio_f32).unwrap();
+
+            for whisper_segment in whisper_segments {
+                let start_sec: f64 = segment.start + whisper_segment.start();
+                let end_sec: f64 = segment.start + whisper_segment.end();
+                let start_ms = (start_sec * 1000.0) as u64;
+                let end_ms = (end_sec * 1000.0) as u64;
+
+                let word = Word2 {
+                    text: whisper_segment.text().to_string(),
+                    speaker: None,
+                    confidence: Some(whisper_segment.confidence()),
+                    start_ms: Some(start_ms),
+                    end_ms: Some(end_ms),
+                };
+
+                // TODO
+                words.push(word.clone());
+            }
+        }
+    }
+
+    #[cfg(not(feature = "pyannote"))]
+    {
+        let audio_f32 = hypr_audio_utils::i16_to_f32_samples(&samples);
         let whisper_segments = model.transcribe(&audio_f32).unwrap();
 
         for whisper_segment in whisper_segments {
-            let start_sec: f64 = segment.start + whisper_segment.start();
-            let end_sec: f64 = segment.start + whisper_segment.end();
-            let start_ms = (start_sec * 1000.0) as u64;
-            let end_ms = (end_sec * 1000.0) as u64;
+            let start_ms = (whisper_segment.start() * 1000.0) as u64;
+            let end_ms = (whisper_segment.end() * 1000.0) as u64;
 
             let word = Word2 {
                 text: whisper_segment.text().to_string(),
