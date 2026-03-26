@@ -87,8 +87,28 @@ if(DEFINED ENV{MINGW_DIR})
             string(APPEND ${_fv} " ${_stdlib_flags}")
         endif()
     endforeach()
+
+    # cmake's CXX compiler detection test compiles AND links a small executable.
+    # lld (llvm-mingw's default linker) cannot find libstdc++ because its library
+    # search path doesn't include MinGW's GCC lib directory.  Switch cmake's test
+    # executable links to MinGW's GNU ld (which already knows its own sysroot and
+    # resolves -lstdc++ automatically).  whisper-rs-sys only builds static libraries,
+    # so this flag never affects the actual whisper.cpp / ggml build — only the
+    # cmake compiler detection step.
+    foreach(_lfv CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
+        get_property(_lc CACHE ${_lfv} PROPERTY VALUE)
+        if(NOT _lc MATCHES "-fuse-ld=")
+            set(${_lfv} "${_lc} -fuse-ld=ld" CACHE STRING "" FORCE)
+        endif()
+        if(DEFINED ${_lfv} AND NOT ${_lfv} MATCHES "-fuse-ld=")
+            string(APPEND ${_lfv} " -fuse-ld=ld")
+        endif()
+    endforeach()
+
     unset(_stdlib_flags)
     unset(_mingw_gcc_tc)
     unset(_fv)
+    unset(_lfv)
     unset(_cached)
+    unset(_lc)
 endif()
