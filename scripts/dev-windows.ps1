@@ -68,21 +68,37 @@ $env:PATH = "$ORT_DIR\lib;$env:PATH"
 #   - C compiler cached as gcc  (toolchain file couldn't override the old cache)
 #   - CXX compiler marked broken (happened when /utf-8 caused clang test to fail)
 # Deleting the cmake build sub-directory forces a fresh configure on next cargo build.
+# Also invalidates cargo's fingerprint so cargo re-runs the build script and regenerates
+# the rustc-link-search metadata pointing into the new cmake build tree.
 $clangExe = ($LLVM_DIR -replace '\\', '/') + "/bin/x86_64-w64-mingw32-clang.exe"
 $cargoBuildDir = Join-Path $REPO_ROOT "apps\desktop\src-tauri\target\debug\build"
+$fingerprintBaseDir = Join-Path (Split-Path $cargoBuildDir) ".fingerprint"
 if (Test-Path -LiteralPath $cargoBuildDir) {
     Get-ChildItem -LiteralPath $cargoBuildDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $cmakeCache = Join-Path $_.FullName "out\build\CMakeCache.txt"
         if (Test-Path -LiteralPath $cmakeCache) {
             $cacheText = Get-Content -LiteralPath $cmakeCache -Raw -ErrorAction SilentlyContinue
-            $gccCached    = $cacheText -match "CMAKE_C_COMPILER:FILEPATH=.*gcc"
-            $cxxBroken    = $cacheText -match "CMAKE_CXX_COMPILER_WORKS:INTERNAL=(FALSE|0|)"
+            $gccCached     = $cacheText -match "CMAKE_C_COMPILER:FILEPATH=.*gcc"
+            $cxxBroken     = $cacheText -match "CMAKE_CXX_COMPILER_WORKS:INTERNAL=(0|FALSE)"
             $wrongCompiler = ($cacheText -notmatch [regex]::Escape($clangExe)) -and
                              ($cacheText -match "CMAKE_C_COMPILER:FILEPATH=")
             if ($gccCached -or $cxxBroken -or $wrongCompiler) {
                 $label = $_.Name.Substring(0, [Math]::Min(40, $_.Name.Length))
                 Write-Host "    Clearing stale cmake cache: $label..."
-                Remove-Item -LiteralPath (Split-Path $cmakeCache -Parent) -Recurse -Force -ErrorAction SilentlyContinue
+                # Delete cmake build dir so cmake-rs reconfigures from scratch.
+                Remove-Item -LiteralPath (Join-Path $_.FullName "out\build") -Recurse -Force -ErrorAction SilentlyContinue
+                # Also delete cargo's fingerprint for this crate.  Without this,
+                # cargo reuses cached rustc-link-search paths that pointed into
+                # the now-deleted cmake build tree, causing a link-time "library
+                # not found" error even though cmake will rebuild successfully.
+                $cratePrefix = $_.Name -replace '-[0-9a-f]+$', ''
+                if (Test-Path -LiteralPath $fingerprintBaseDir) {
+                    Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
+                        Where-Object { $_.Name -like "$cratePrefix-*" } |
+                        ForEach-Object {
+                            Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                        }
+                }
             }
         }
     }
