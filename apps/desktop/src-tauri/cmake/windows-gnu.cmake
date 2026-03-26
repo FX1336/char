@@ -16,11 +16,15 @@
 #      is clang's default anyway.
 
 # ── Compilers (paths come from CC/CXX env vars set by dev-windows.ps1) ───────
+# file(TO_CMAKE_PATH ...) converts Windows backslash paths to forward slashes so
+# cmake does not misparse the compiler path in generated Makefiles.
 if(DEFINED ENV{CMAKE_C_COMPILER})
-    set(CMAKE_C_COMPILER "$ENV{CMAKE_C_COMPILER}" CACHE FILEPATH "" FORCE)
+    file(TO_CMAKE_PATH "$ENV{CMAKE_C_COMPILER}" _tc_c)
+    set(CMAKE_C_COMPILER "${_tc_c}" CACHE FILEPATH "" FORCE)
 endif()
 if(DEFINED ENV{CMAKE_CXX_COMPILER})
-    set(CMAKE_CXX_COMPILER "$ENV{CMAKE_CXX_COMPILER}" CACHE FILEPATH "" FORCE)
+    file(TO_CMAKE_PATH "$ENV{CMAKE_CXX_COMPILER}" _tc_cxx)
+    set(CMAKE_CXX_COMPILER "${_tc_cxx}" CACHE FILEPATH "" FORCE)
 endif()
 
 # ── Flatten static-library output into CMAKE_INSTALL_PREFIX (= OUT_DIR) ───────

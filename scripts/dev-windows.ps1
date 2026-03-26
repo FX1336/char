@@ -97,7 +97,7 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
                 # cargo reuses cached rustc-link-search paths that pointed into
                 # the now-deleted cmake build tree, causing a link-time "library
                 # not found" error even though cmake will rebuild successfully.
-                $cratePrefix = $_.Name -replace '-[0-9a-f]+$', ''
+                $cratePrefix = $_.Name -replace '-[0-9a-fA-F]+$', ''
                 if (Test-Path -LiteralPath $fingerprintBaseDir) {
                     Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
                         Where-Object { $_.Name -like "$cratePrefix-*" } |
@@ -123,7 +123,7 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
         ForEach-Object {
             $cmakeOut    = Join-Path $_.FullName "out\build"
             $cacheFile   = Join-Path $cmakeOut "CMakeCache.txt"
-            $cratePrefix = $_.Name -replace '-[0-9a-f]+$', ''
+            $cratePrefix = $_.Name -replace '-[0-9a-fA-F]+$', ''
 
             $cacheExists = Test-Path -LiteralPath $cacheFile
             $hasGgml     = $cacheExists -and [bool](
@@ -172,7 +172,7 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
         $ggmls     = @(Get-ChildItem -LiteralPath $d.FullName -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue)
         $fpCount   = 0
         if (Test-Path -LiteralPath $fingerprintBaseDir) {
-            $pfx     = $d.Name -replace '-[0-9a-f]+$', ''
+            $pfx     = $d.Name -replace '-[0-9a-fA-F]+$', ''
             $fpCount = @(Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
                              Where-Object { $_.Name -like "$pfx-*" }).Count
         }
