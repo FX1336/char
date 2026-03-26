@@ -111,5 +111,11 @@ automation = ["tauri-plugin-automation"]
 tauri-plugin-automation = { version = "0.1", optional = true }
 hypr-intercept = { workspace = true }
 
-[target.'cfg(target_os = "windows")'.dependencies]
+# GNU target (local dev, x86_64-pc-windows-gnu): no directml because the standard
+# onnxruntime-win-x64 release does not export OrtSessionOptionsAppendExecutionProvider_DML.
+[target.'cfg(all(target_os = "windows", target_env = "gnu"))'.dependencies]
+tauri-plugin-local-stt = { workspace = true, features = ["whisper-cpp"] }
+
+# MSVC target (CI, x86_64-pc-windows-msvc): directml enabled via the full ORT release.
+[target.'cfg(all(target_os = "windows", target_env = "msvc"))'.dependencies]
 tauri-plugin-local-stt = { workspace = true, features = ["whisper-cpp", "directml"] }

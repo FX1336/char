@@ -62,3 +62,33 @@ foreach(_flag_var
         string(REPLACE "/utf-8" "" ${_flag_var} "${${_flag_var}}")
     endif()
 endforeach()
+
+# ── Switch clang++ to libstdc++ (avoid std::__1:: ABI mismatch) ───────────────
+# llvm-mingw's clang++ defaults to LLVM libc++ which places all C++ symbols in
+# the std::__1:: inline namespace.  MinGW's gcc.exe (used as Rust's linker)
+# links libstdc++ by default, which uses plain std:: — so every std::__1::*
+# reference from whisper.cpp/ggml/knf-rs objects is left unresolved at link time.
+# Passing -stdlib=libstdc++ makes clang compile against GCC's C++ headers
+# (plain std:: namespace) instead.  --gcc-toolchain points clang at the winlibs
+# MinGW-w64 installation where the libstdc++ headers live.
+# MINGW_DIR env var is exported by dev-windows.ps1.
+if(DEFINED ENV{MINGW_DIR})
+    file(TO_CMAKE_PATH "$ENV{MINGW_DIR}" _mingw_gcc_tc)
+    set(_stdlib_flags "-stdlib=libstdc++ --gcc-toolchain=${_mingw_gcc_tc}")
+    foreach(_fv
+        CMAKE_CXX_FLAGS
+        CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
+        CMAKE_CXX_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_MINSIZEREL)
+        get_property(_cached CACHE ${_fv} PROPERTY VALUE)
+        if(NOT _cached MATCHES "-stdlib=")
+            set(${_fv} "${_cached} ${_stdlib_flags}" CACHE STRING "" FORCE)
+        endif()
+        if(DEFINED ${_fv} AND NOT ${_fv} MATCHES "-stdlib=")
+            string(APPEND ${_fv} " ${_stdlib_flags}")
+        endif()
+    endforeach()
+    unset(_stdlib_flags)
+    unset(_mingw_gcc_tc)
+    unset(_fv)
+    unset(_cached)
+endif()

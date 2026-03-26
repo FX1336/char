@@ -40,6 +40,13 @@ $env:CMAKE_CXX_COMPILER = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang++.exe"
 $toolchainFile = ($REPO_ROOT -replace '\\', '/') + "/apps/desktop/src-tauri/cmake/windows-gnu.cmake"
 $env:CMAKE_TOOLCHAIN_FILE = $toolchainFile
 
+# Export MINGW_DIR so the cmake toolchain file can find the libstdc++ headers via
+# --gcc-toolchain.  Also set CXXFLAGS so cc-rs (knf-rs-sys, etc.) compile C++ with
+# libstdc++ instead of llvm-mingw's libc++, preventing std::__1:: ABI mismatches.
+$env:MINGW_DIR = $MINGW_DIR
+$mingwDirFwd   = $MINGW_DIR -replace '\\', '/'
+$env:CXXFLAGS  = "-stdlib=libstdc++ --gcc-toolchain=$mingwDirFwd"
+
 # cmake_project_include_before: loaded before every project() call in the build
 # tree.  Our script defers a fix that sets PREFIX "lib" on ggml targets after all
 # targets are defined (overriding ggml/CMakeLists.txt's WIN32 set(CMAKE_STATIC_LIBRARY_PREFIX "")).
@@ -146,13 +153,25 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
                 Get-ChildItem -LiteralPath $_.FullName -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue |
                     Select-Object -First 1)
 
+            # Scenario C: cmake cache exists but was built without -stdlib=libstdc++
+            # (i.e., a previous build before this flag was added).  Force a clean
+            # reconfigure so clang picks up the new stdlib flag.
+            $scenarioC = $false
+            if ($cacheExists) {
+                $cacheText = Get-Content -LiteralPath $cacheFile -Raw -ErrorAction SilentlyContinue
+                if ($cacheText -and ($cacheText -notmatch "-stdlib=libstdc\+\+")) {
+                    $scenarioC = $true
+                }
+            }
+
             # Scenario A: cmake ran but the compiled library is absent anywhere
             # Scenario B: cmake dir was wiped but a fingerprint survived
             $scenarioA = $cacheExists -and (-not $hasGgml)
             $scenarioB = (-not $cacheExists)
 
-            if ($scenarioA -or $scenarioB) {
+            if ($scenarioA -or $scenarioB -or $scenarioC) {
                 $reason = if ($scenarioA) { "cmake built but libggml.a missing" } `
+                     elseif ($scenarioC) { "cmake cache missing -stdlib=libstdc++ -- reconfiguring" } `
                           else            { "cmake dir absent -- will build from scratch" }
                 Write-Host "    whisper-rs-sys: $reason" -ForegroundColor Yellow
                 if (Test-Path -LiteralPath $cmakeOut) {
