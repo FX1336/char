@@ -110,26 +110,49 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
     }
 }
 
-# Secondary safety net: if whisper-rs-sys cmake already ran (CMakeCache.txt
-# exists) but libggml.a is missing, the previous build was incomplete.
-# Clear the cmake dir + fingerprint so cargo re-runs the build script.
+# Safety net for whisper-rs-sys: detect incomplete cmake builds and
+# stale cargo fingerprints, then clear them so cargo runs the build
+# script fresh.  Two scenarios handled:
+#   A. cmake ran (CMakeCache.txt exists) but libggml.a is missing.
+#   B. cmake build dir was deleted (no CMakeCache.txt) but a cargo
+#      fingerprint from a previous run still exists — cargo would skip
+#      the build script and the linker would fail looking for libggml.a.
 if (Test-Path -LiteralPath $cargoBuildDir) {
     Get-ChildItem -LiteralPath $cargoBuildDir -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match "^whisper-rs-sys-" } |
         ForEach-Object {
-            $cmakeOut = Join-Path $_.FullName "out\build"
-            $cacheFile = Join-Path $cmakeOut "CMakeCache.txt"
-            if (Test-Path -LiteralPath $cacheFile) {
-                $hasGgml = [bool](Get-ChildItem -LiteralPath $cmakeOut -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
-                if (-not $hasGgml) {
-                    Write-Host "    whisper cmake built but libggml.a missing - clearing for full rebuild..." -ForegroundColor Yellow
+            $cmakeOut    = Join-Path $_.FullName "out\build"
+            $cacheFile   = Join-Path $cmakeOut "CMakeCache.txt"
+            $cratePrefix = $_.Name -replace '-[0-9a-f]+$', ''
+
+            $cacheExists = Test-Path -LiteralPath $cacheFile
+            $hasGgml     = $cacheExists -and [bool](
+                Get-ChildItem -LiteralPath $cmakeOut -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue |
+                    Select-Object -First 1)
+            $fpExists    = (Test-Path -LiteralPath $fingerprintBaseDir) -and [bool](
+                Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -like "$cratePrefix-*" } | Select-Object -First 1)
+
+            # Scenario A: cmake ran but the compiled library is absent
+            # Scenario B: cmake dir was wiped but fingerprint survived (cargo
+            #             would use stale rustc-link-search paths and the
+            #             linker would fail to find libggml.a)
+            $scenarioA = $cacheExists  -and (-not $hasGgml)
+            $scenarioB = (-not $cacheExists) -and $fpExists
+
+            if ($scenarioA -or $scenarioB) {
+                $reason = if ($scenarioA) { "cmake built but libggml.a missing" } `
+                          else            { "cmake dir gone but fingerprint survives" }
+                Write-Host "    whisper-rs-sys: $reason - clearing for rebuild..." -ForegroundColor Yellow
+                if (Test-Path -LiteralPath $cmakeOut) {
                     Remove-Item -LiteralPath $cmakeOut -Recurse -Force -ErrorAction SilentlyContinue
-                    $cratePrefix = $_.Name -replace '-[0-9a-f]+$', ''
-                    if (Test-Path -LiteralPath $fingerprintBaseDir) {
-                        Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
-                            Where-Object { $_.Name -like "$cratePrefix-*" } |
-                            ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
-                    }
+                }
+                if (Test-Path -LiteralPath $fingerprintBaseDir) {
+                    Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
+                        Where-Object { $_.Name -like "$cratePrefix-*" } |
+                        ForEach-Object {
+                            Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                        }
                 }
             }
         }
