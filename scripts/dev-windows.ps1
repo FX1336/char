@@ -64,6 +64,12 @@ $env:ORT_LIB_LOCATION = $ORT_DIR
 $env:ORT_PREFER_DYNAMIC_LINK = "1"
 $env:PATH = "$ORT_DIR\lib;$env:PATH"
 
+# cmake verbose makefile: causes make to print every compiler invocation.
+# When a cmake build FAILS, cargo captures and displays the full build script
+# output including these lines, making it easier to diagnose compile errors.
+# (Has no effect when the build succeeds.)
+$env:CMAKE_VERBOSE_MAKEFILE = "ON"
+
 # Clear stale cmake caches that would cause build failures:
 #   - C compiler cached as gcc  (toolchain file couldn't override the old cache)
 #   - CXX compiler marked broken (happened when /utf-8 caused clang test to fail)
@@ -102,6 +108,31 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
             }
         }
     }
+}
+
+# Secondary safety net: if whisper-rs-sys cmake already ran (CMakeCache.txt
+# exists) but libggml.a is missing, the previous build was incomplete.
+# Clear the cmake dir + fingerprint so cargo re-runs the build script.
+if (Test-Path -LiteralPath $cargoBuildDir) {
+    Get-ChildItem -LiteralPath $cargoBuildDir -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match "^whisper-rs-sys-" } |
+        ForEach-Object {
+            $cmakeOut = Join-Path $_.FullName "out\build"
+            $cacheFile = Join-Path $cmakeOut "CMakeCache.txt"
+            if (Test-Path -LiteralPath $cacheFile) {
+                $hasGgml = [bool](Get-ChildItem -LiteralPath $cmakeOut -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
+                if (-not $hasGgml) {
+                    Write-Host "    whisper cmake built but libggml.a missing — clearing for full rebuild..." -ForegroundColor Yellow
+                    Remove-Item -LiteralPath $cmakeOut -Recurse -Force -ErrorAction SilentlyContinue
+                    $cratePrefix = $_.Name -replace '-[0-9a-f]+$', ''
+                    if (Test-Path -LiteralPath $fingerprintBaseDir) {
+                        Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
+                            Where-Object { $_.Name -like "$cratePrefix-*" } |
+                            ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+                    }
+                }
+            }
+        }
 }
 
 
