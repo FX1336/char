@@ -110,13 +110,19 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
     }
 }
 
-# Safety net for whisper-rs-sys: detect incomplete cmake builds and
-# stale cargo fingerprints, then clear them so cargo runs the build
-# script fresh.  Two scenarios handled:
-#   A. cmake ran (CMakeCache.txt exists) but libggml.a is missing.
-#   B. cmake build dir was deleted (no CMakeCache.txt) but a cargo
-#      fingerprint from a previous run still exists — cargo would skip
-#      the build script and the linker would fail looking for libggml.a.
+# Safety net for whisper-rs-sys.
+# whisper-rs-sys build.rs doesn't declare rerun-if-env-changed for
+# CMAKE_TOOLCHAIN_FILE / CMAKE_C_COMPILER, so cargo caches the build
+# script output (rustc-link-search paths) indefinitely even when the
+# cmake configuration changes.  We unconditionally clear the fingerprint
+# so cargo always re-runs the build script, cmake re-configures
+# (always_configure=true), and fresh link-search paths are emitted.
+# cmake build itself is still incremental: if nothing changed, it only
+# takes a few seconds.
+#
+# In addition, if cmake ran but libggml.a is absent (Scenario A) or the
+# cmake build dir was wiped while a fingerprint survived (Scenario B),
+# also delete the cmake build tree so cmake starts from scratch.
 if (Test-Path -LiteralPath $cargoBuildDir) {
     Get-ChildItem -LiteralPath $cargoBuildDir -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match "^whisper-rs-sys-" } |
@@ -126,34 +132,35 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
             $cratePrefix = $_.Name -replace '-[0-9a-fA-F]+$', ''
 
             $cacheExists = Test-Path -LiteralPath $cacheFile
-            $hasGgml     = $cacheExists -and [bool](
-                Get-ChildItem -LiteralPath $cmakeOut -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue |
+            # Search the full crate out/ tree (not just out/build/) so we find
+            # libggml.a whether cmake put it in out/ (CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
+            # or in out/build/ggml/src/ (default cmake layout).
+            $hasGgml = $cacheExists -and [bool](
+                Get-ChildItem -LiteralPath $_.FullName -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue |
                     Select-Object -First 1)
-            $fpExists    = (Test-Path -LiteralPath $fingerprintBaseDir) -and [bool](
-                Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -like "$cratePrefix-*" } | Select-Object -First 1)
 
-            # Scenario A: cmake ran but the compiled library is absent
-            # Scenario B: cmake dir was wiped but fingerprint survived (cargo
-            #             would use stale rustc-link-search paths and the
-            #             linker would fail to find libggml.a)
-            $scenarioA = $cacheExists  -and (-not $hasGgml)
-            $scenarioB = (-not $cacheExists) -and $fpExists
+            # Scenario A: cmake ran but the compiled library is absent anywhere
+            # Scenario B: cmake dir was wiped but a fingerprint survived
+            $scenarioA = $cacheExists -and (-not $hasGgml)
+            $scenarioB = (-not $cacheExists)
 
             if ($scenarioA -or $scenarioB) {
                 $reason = if ($scenarioA) { "cmake built but libggml.a missing" } `
-                          else            { "cmake dir gone but fingerprint survives" }
-                Write-Host "    whisper-rs-sys: $reason - clearing for rebuild..." -ForegroundColor Yellow
+                          else            { "cmake dir absent -- will build from scratch" }
+                Write-Host "    whisper-rs-sys: $reason" -ForegroundColor Yellow
                 if (Test-Path -LiteralPath $cmakeOut) {
                     Remove-Item -LiteralPath $cmakeOut -Recurse -Force -ErrorAction SilentlyContinue
                 }
-                if (Test-Path -LiteralPath $fingerprintBaseDir) {
-                    Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
-                        Where-Object { $_.Name -like "$cratePrefix-*" } |
-                        ForEach-Object {
-                            Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                        }
-                }
+            }
+
+            # Always clear fingerprint so cargo re-runs the build script and emits
+            # fresh rustc-link-search paths that reflect the current cmake output.
+            if (Test-Path -LiteralPath $fingerprintBaseDir) {
+                Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -like "$cratePrefix-*" } |
+                    ForEach-Object {
+                        Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                    }
             }
         }
 }
@@ -287,4 +294,26 @@ Write-Host ""
 
 Push-Location $REPO_ROOT
 pnpm -F "@hypr/desktop" tauri:dev
+$devExitCode = $LASTEXITCODE
 Pop-Location
+
+if ($devExitCode -ne 0) {
+    Write-Host "`n==> Build failed -- whisper-rs-sys artifact locations" -ForegroundColor Yellow
+    $innerBuildDir = Join-Path $REPO_ROOT "apps\desktop\src-tauri\target\debug\build"
+    if (Test-Path -LiteralPath $innerBuildDir) {
+        $wrsDirs = @(Get-ChildItem -LiteralPath $innerBuildDir -Directory -ErrorAction SilentlyContinue |
+                         Where-Object { $_.Name -match "^whisper-rs-sys-" })
+        foreach ($d in $wrsDirs) {
+            $aFiles = @(Get-ChildItem -LiteralPath $d.FullName -Filter "*.a" -Recurse -ErrorAction SilentlyContinue)
+            Write-Host "  $($d.Name):"
+            if ($aFiles.Count -eq 0) {
+                Write-Host "    (no .a files found -- cmake did not produce libraries)"
+            } else {
+                foreach ($f in $aFiles) { Write-Host "    $($f.FullName)" }
+            }
+        }
+    } else {
+        Write-Host "  target/debug/build/ does not exist"
+    }
+    exit $devExitCode
+}
