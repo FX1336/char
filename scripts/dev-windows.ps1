@@ -122,7 +122,7 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
             if (Test-Path -LiteralPath $cacheFile) {
                 $hasGgml = [bool](Get-ChildItem -LiteralPath $cmakeOut -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
                 if (-not $hasGgml) {
-                    Write-Host "    whisper cmake built but libggml.a missing — clearing for full rebuild..." -ForegroundColor Yellow
+                    Write-Host "    whisper cmake built but libggml.a missing - clearing for full rebuild..." -ForegroundColor Yellow
                     Remove-Item -LiteralPath $cmakeOut -Recurse -Force -ErrorAction SilentlyContinue
                     $cratePrefix = $_.Name -replace '-[0-9a-f]+$', ''
                     if (Test-Path -LiteralPath $fingerprintBaseDir) {
