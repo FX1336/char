@@ -23,6 +23,23 @@ if(DEFINED ENV{CMAKE_CXX_COMPILER})
     set(CMAKE_CXX_COMPILER "$ENV{CMAKE_CXX_COMPILER}" CACHE FILEPATH "" FORCE)
 endif()
 
+# ── Flatten static-library output into CMAKE_INSTALL_PREFIX (= OUT_DIR) ───────
+# cmake-rs (the cmake crate) sets CMAKE_INSTALL_PREFIX to the build script's
+# OUT_DIR and then searches OUT_DIR itself with
+#   cargo:rustc-link-search=native=OUT_DIR
+# By default, cmake places static libraries deep inside subdirectories of the
+# build tree (e.g. OUT_DIR/build/ggml/src/libggml.a).  The whisper-rs-sys
+# build.rs does recurse those subdirs with add_link_search_path(), but on
+# Windows the resulting backslash paths can be mis-handled by the GNU linker.
+# Setting CMAKE_ARCHIVE_OUTPUT_DIRECTORY to OUT_DIR puts every .a file
+# directly in the directory that cargo always passes as -L to the linker,
+# so libggml.a / libggml-base.a / libggml-cpu.a / libwhisper.a are always
+# found regardless of build-tree depth.
+if(DEFINED CMAKE_INSTALL_PREFIX)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_INSTALL_PREFIX}"
+        CACHE PATH "" FORCE)
+endif()
+
 # ── Strip /utf-8 from all flag variables ──────────────────────────────────────
 foreach(_flag_var
     CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_ASM_FLAGS

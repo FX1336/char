@@ -158,6 +158,34 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
         }
 }
 
+# Diagnostic: always report whisper-rs-sys build state so failures are visible.
+Write-Host "`n==> whisper-rs-sys build state" -ForegroundColor Cyan
+if (Test-Path -LiteralPath $cargoBuildDir) {
+    $wrsAll = @(Get-ChildItem -LiteralPath $cargoBuildDir -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -match "^whisper-rs-sys-" })
+    if ($wrsAll.Count -eq 0) {
+        Write-Host "    (no build dir yet -- will be created on first cargo build)"
+    }
+    foreach ($d in $wrsAll) {
+        $cmakeOut  = Join-Path $d.FullName "out\build"
+        $hasCache  = Test-Path -LiteralPath (Join-Path $cmakeOut "CMakeCache.txt")
+        $ggmls     = @(Get-ChildItem -LiteralPath $d.FullName -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue)
+        $fpCount   = 0
+        if (Test-Path -LiteralPath $fingerprintBaseDir) {
+            $pfx     = $d.Name -replace '-[0-9a-f]+$', ''
+            $fpCount = @(Get-ChildItem -LiteralPath $fingerprintBaseDir -Directory -ErrorAction SilentlyContinue |
+                             Where-Object { $_.Name -like "$pfx-*" }).Count
+        }
+        $short = $d.Name.Substring(0, [Math]::Min(44, $d.Name.Length))
+        Write-Host "    $short"
+        Write-Host "      cmake cache : $(if ($hasCache) { 'present' } else { 'absent' })"
+        Write-Host "      libggml.a   : $(if ($ggmls.Count -gt 0) { $ggmls[0].FullName } else { 'NOT FOUND' })"
+        Write-Host "      fingerprints: $fpCount"
+    }
+} else {
+    Write-Host "    target/debug/build/ not yet created"
+}
+
 
 # Git for Windows ships a GNU cp.exe in usr\bin, but only adds cmd\ to PATH by
 # default.  Find the usr\bin directory and prepend it so Cargo sees a real cp.
