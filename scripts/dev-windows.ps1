@@ -40,6 +40,13 @@ $env:CMAKE_CXX_COMPILER = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang++.exe"
 $toolchainFile = ($REPO_ROOT -replace '\\', '/') + "/apps/desktop/src-tauri/cmake/windows-gnu.cmake"
 $env:CMAKE_TOOLCHAIN_FILE = $toolchainFile
 
+# cmake_project_include_before: loaded before every project() call in the build
+# tree.  Our script defers a fix that sets PREFIX "lib" on ggml targets after all
+# targets are defined (overriding ggml/CMakeLists.txt's WIN32 set(CMAKE_STATIC_LIBRARY_PREFIX "")).
+# Without this, cmake generates ggml.a instead of libggml.a and GNU ld can't find it.
+$prefixFix = ($REPO_ROOT -replace '\\', '/') + "/apps/desktop/src-tauri/cmake/whisper-gnu-ggml-prefix.cmake"
+$env:CMAKE_PROJECT_INCLUDE_BEFORE = $prefixFix
+
 # Bindgen (libclang.dll from PyPI libclang 18.x) needs to find clang built-in
 # headers (stdbool.h, stdint.h) and MinGW system headers.  The PyPI libclang is a
 # different LLVM version from llvm-mingw, so its default resource-dir lookup fails.
