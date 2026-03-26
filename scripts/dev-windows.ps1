@@ -40,12 +40,15 @@ $env:CMAKE_CXX_COMPILER = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang++.exe"
 $toolchainFile = ($REPO_ROOT -replace '\\', '/') + "/apps/desktop/src-tauri/cmake/windows-gnu.cmake"
 $env:CMAKE_TOOLCHAIN_FILE = $toolchainFile
 
-# Export MINGW_DIR so the cmake toolchain file can find the libstdc++ headers via
-# --gcc-toolchain.  Also set CXXFLAGS so cc-rs (knf-rs-sys, etc.) compile C++ with
-# libstdc++ instead of llvm-mingw's libc++, preventing std::__1:: ABI mismatches.
-$env:MINGW_DIR = $MINGW_DIR
-$mingwDirFwd   = $MINGW_DIR -replace '\\', '/'
-$env:CXXFLAGS  = "-stdlib=libstdc++ --gcc-toolchain=$mingwDirFwd"
+# llvm-mingw's clang++ compiles whisper.cpp with LLVM libc++ (std::__1:: namespace).
+# whisper-rs-sys hard-codes cargo:rustc-link-lib=dylib=stdc++, so libstdc++ is always
+# linked — but it has no std::__1:: symbols, leaving them unresolved.
+# Adding libc++/libc++abi/libunwind from llvm-mingw's sysroot via RUSTFLAGS closes
+# the gap at the final Rust link step without touching cmake's compilation flags.
+# (Changing cmake to -stdlib=libstdc++ breaks cmake's CXX compiler detection test
+# because lld can't find libstdc++ — so we leave cmake alone.)
+$llvmLibDir    = ($LLVM_DIR -replace '\\', '/') + "/x86_64-w64-mingw32/lib"
+$env:RUSTFLAGS = "-L native=$llvmLibDir -l static=c++ -l static=c++abi -l static=unwind"
 
 # cmake_project_include_before: loaded before every project() call in the build
 # tree.  Our script defers a fix that sets PREFIX "lib" on ggml targets after all
@@ -153,15 +156,15 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
                 Get-ChildItem -LiteralPath $_.FullName -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue |
                     Select-Object -First 1)
 
-            # Scenario C: cmake cache exists but was built without -stdlib=libstdc++
-            # (i.e., a previous build before this flag was added).  Force a clean
-            # reconfigure so clang picks up the new stdlib flag.
+            # Scenario C: cmake cache has stale -stdlib=libstdc++ from a previous
+            # failed attempt to fix the libc++ ABI mismatch via cmake flags.
+            # That flag breaks cmake's CXX compiler detection test (lld can't find
+            # libstdc++).  Clear the cmake dir so it reconfigures cleanly; the ABI
+            # fix is now applied at the Rust link step via RUSTFLAGS instead.
             $scenarioC = $false
             if ($cacheExists) {
-                $cacheText = Get-Content -LiteralPath $cacheFile -Raw -ErrorAction SilentlyContinue
-                if ($cacheText -and ($cacheText -notmatch "-stdlib=libstdc\+\+")) {
-                    $scenarioC = $true
-                }
+                $ct = Get-Content -LiteralPath $cacheFile -Raw -ErrorAction SilentlyContinue
+                if ($ct -and ($ct -match "-stdlib=libstdc\+\+")) { $scenarioC = $true }
             }
 
             # Scenario A: cmake ran but the compiled library is absent anywhere
@@ -171,7 +174,7 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
 
             if ($scenarioA -or $scenarioB -or $scenarioC) {
                 $reason = if ($scenarioA) { "cmake built but libggml.a missing" } `
-                     elseif ($scenarioC) { "cmake cache missing -stdlib=libstdc++ -- reconfiguring" } `
+                     elseif ($scenarioC) { "cmake cache has stale -stdlib=libstdc++ -- reconfiguring" } `
                           else            { "cmake dir absent -- will build from scratch" }
                 Write-Host "    whisper-rs-sys: $reason" -ForegroundColor Yellow
                 if (Test-Path -LiteralPath $cmakeOut) {
