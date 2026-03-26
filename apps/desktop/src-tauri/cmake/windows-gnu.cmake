@@ -4,16 +4,20 @@
 # the environment and passes it as -DCMAKE_TOOLCHAIN_FILE to every cmake invocation.
 #
 # This file runs after command-line -D cache entries are set, so it can FORCE-override
-# them.  Two problems fixed here:
+# them.  Three problems fixed here:
 #
 #   1. CMAKE_C/CXX_COMPILER: cmake-rs intentionally skips setting these on non-MSVC
 #      Windows (cmake-rs lib.rs line ~782).  Without this file cmake auto-detects
-#      gcc.exe from PATH, which rejects clang-specific flags like --target=...
+#      gcc.exe from PATH instead of the exact MinGW cross-compiler we want.
 #
-#   2. /utf-8 in CMAKE_CXX_FLAGS: whisper-rs-sys build.rs unconditionally calls
-#      config.cxxflag("/utf-8") on all Windows builds.  Clang in GNU driver mode
-#      treats /utf-8 as a filename and errors.  Strip it here; UTF-8 source encoding
-#      is clang's default anyway.
+#   2. /utf-8 in cmake flags: whisper-rs-sys build.rs unconditionally calls
+#      config.cxxflag("/utf-8") on all Windows builds.  GCC treats /utf-8 as a
+#      filename and errors.  Strip it here; UTF-8 source encoding is gcc's default.
+#
+#   3. --target=... in cmake flags: whisper-rs-sys build.rs injects
+#      --target=x86_64-pc-windows-gnu unconditionally on Windows GNU targets.
+#      This is a clang-only flag; MinGW GCC rejects it with "unrecognized argument".
+#      Strip it here.
 
 # ── Compilers (paths come from CC/CXX env vars set by dev-windows.ps1) ───────
 # file(TO_CMAKE_PATH ...) converts Windows backslash paths to forward slashes so
@@ -44,7 +48,7 @@ if(DEFINED CMAKE_INSTALL_PREFIX)
         CACHE PATH "" FORCE)
 endif()
 
-# ── Strip /utf-8 from all flag variables ──────────────────────────────────────
+# ── Strip GCC-incompatible flags injected by whisper-rs-sys build.rs ──────────
 foreach(_flag_var
     CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_ASM_FLAGS
     CMAKE_C_FLAGS_DEBUG CMAKE_CXX_FLAGS_DEBUG
@@ -55,10 +59,12 @@ foreach(_flag_var
     get_property(_val CACHE ${_flag_var} PROPERTY VALUE)
     if(_val)
         string(REPLACE "/utf-8" "" _val "${_val}")
+        string(REGEX REPLACE "--target=[^ ]+" "" _val "${_val}")
         set(${_flag_var} "${_val}" CACHE STRING "" FORCE)
     endif()
     # Also strip from any normal variable with the same name
     if(DEFINED ${_flag_var})
         string(REPLACE "/utf-8" "" ${_flag_var} "${${_flag_var}}")
+        string(REGEX REPLACE "--target=[^ ]+" "" ${_flag_var} "${${_flag_var}}")
     endif()
 endforeach()

@@ -18,37 +18,31 @@ $MINGW_DIR = "$HOME\.local\mingw64"
 $LLVM_DIR = "$HOME\.local\llvm"
 
 # Ensure tools installed by setup-windows.ps1 are on PATH.
-# MinGW bin must be here for the Rust GNU linker (x86_64-w64-mingw32-gcc, ld, etc.).
-# llvm-mingw is NOT added to PATH: its x86_64-w64-mingw32-gcc wrapper uses lld which
-# cannot find MinGW's libgcc/libgcc_eh.  llvm-mingw tools are referenced via explicit
-# full paths in CC/CXX and the cmake toolchain file below.
+# MinGW bin must be here for the Rust GNU linker (x86_64-w64-mingw32-gcc, ld, etc.)
+# and as the C/C++ compiler for cc-rs and cmake (whisper-rs-sys, libsql-ffi, etc.).
 $env:PATH = "$MINGW_DIR\bin;$LOCAL_BIN;$env:USERPROFILE\.cargo\bin;$env:PATH"
 
-# Use Clang from llvm-mingw as the C/C++ compiler for cc-rs (ring, etc.).
-$env:LIBCLANG_PATH = "$LLVM_DIR\bin"   # libclang.dll lives here (from PyPI libclang wheel)
-$env:CC  = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang.exe"
-$env:CXX = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang++.exe"
+# Use MinGW GCC/G++ as the C/C++ compiler for cc-rs and cmake.
+# MinGW g++ compiles with libstdc++ (std:: namespace); whisper-rs-sys hard-codes
+# cargo:rustc-link-lib=dylib=stdc++ so the toolchain is consistent end-to-end.
+# llvm-mingw clang++ uses LLVM libc++ (std::__1:: namespace) which is incompatible
+# with MinGW's libstdc++ at link time — hence we avoid clang++ for C++ compilation.
+$env:LIBCLANG_PATH = "$LLVM_DIR\bin"   # libclang.dll lives here (for bindgen)
+$env:CC  = "$MINGW_DIR\bin\x86_64-w64-mingw32-gcc.exe"
+$env:CXX = "$MINGW_DIR\bin\x86_64-w64-mingw32-g++.exe"
 # cmake toolchain file: cmake-rs reads CMAKE_TOOLCHAIN_FILE and passes it as
 # -DCMAKE_TOOLCHAIN_FILE to every cmake invocation (whisper-rs-sys, libsql-ffi, etc.).
 # The file (apps/desktop/src-tauri/cmake/windows-gnu.cmake):
 #   1. Sets CMAKE_C/CXX_COMPILER from env — cmake-rs intentionally skips this on
 #      non-MSVC Windows, so cmake would otherwise auto-detect gcc.exe from PATH.
-#   2. Strips /utf-8 from CMAKE_CXX_FLAGS — whisper-rs-sys adds it unconditionally
-#      on Windows but clang in GNU driver mode treats it as a filename.
-$env:CMAKE_C_COMPILER   = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang.exe"
-$env:CMAKE_CXX_COMPILER = "$LLVM_DIR\bin\x86_64-w64-mingw32-clang++.exe"
+#   2. Strips /utf-8 from cmake flags — whisper-rs-sys adds it unconditionally on
+#      Windows but GCC treats it as a filename, not a flag.
+#   3. Strips --target=... from cmake flags — whisper-rs-sys injects this
+#      clang-specific flag unconditionally; GCC does not accept it.
+$env:CMAKE_C_COMPILER   = "$MINGW_DIR\bin\x86_64-w64-mingw32-gcc.exe"
+$env:CMAKE_CXX_COMPILER = "$MINGW_DIR\bin\x86_64-w64-mingw32-g++.exe"
 $toolchainFile = ($REPO_ROOT -replace '\\', '/') + "/apps/desktop/src-tauri/cmake/windows-gnu.cmake"
 $env:CMAKE_TOOLCHAIN_FILE = $toolchainFile
-
-# llvm-mingw's clang++ compiles whisper.cpp with LLVM libc++ (std::__1:: namespace).
-# whisper-rs-sys hard-codes cargo:rustc-link-lib=dylib=stdc++, so libstdc++ is always
-# linked — but it has no std::__1:: symbols, leaving them unresolved.
-# Adding libc++/libc++abi/libunwind from llvm-mingw's sysroot via RUSTFLAGS closes
-# the gap at the final Rust link step without touching cmake's compilation flags.
-# (Changing cmake to -stdlib=libstdc++ breaks cmake's CXX compiler detection test
-# because lld can't find libstdc++ — so we leave cmake alone.)
-$llvmLibDir    = ($LLVM_DIR -replace '\\', '/') + "/x86_64-w64-mingw32/lib"
-$env:RUSTFLAGS = "-L native=$llvmLibDir -l static=c++ -l static=c++abi -l static=unwind"
 
 # cmake_project_include_before: loaded before every project() call in the build
 # tree.  Our script defers a fix that sets PREFIX "lib" on ggml targets after all
@@ -93,7 +87,7 @@ $env:CMAKE_VERBOSE_MAKEFILE = "ON"
 # Deleting the cmake build sub-directory forces a fresh configure on next cargo build.
 # Also invalidates cargo's fingerprint so cargo re-runs the build script and regenerates
 # the rustc-link-search metadata pointing into the new cmake build tree.
-$clangExe = ($LLVM_DIR -replace '\\', '/') + "/bin/x86_64-w64-mingw32-clang.exe"
+$expectedCCompiler = ($MINGW_DIR -replace '\\', '/') + "/bin/x86_64-w64-mingw32-gcc.exe"
 $cargoBuildDir = Join-Path $REPO_ROOT "apps\desktop\src-tauri\target\debug\build"
 $fingerprintBaseDir = Join-Path (Split-Path $cargoBuildDir) ".fingerprint"
 if (Test-Path -LiteralPath $cargoBuildDir) {
@@ -101,9 +95,9 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
         $cmakeCache = Join-Path $_.FullName "out\build\CMakeCache.txt"
         if (Test-Path -LiteralPath $cmakeCache) {
             $cacheText = Get-Content -LiteralPath $cmakeCache -Raw -ErrorAction SilentlyContinue
-            $gccCached     = $cacheText -match "CMAKE_C_COMPILER:FILEPATH=.*gcc"
+            $gccCached     = $false   # we now expect MinGW gcc; no longer a problem
             $cxxBroken     = $cacheText -match "CMAKE_CXX_COMPILER_WORKS:INTERNAL=(0|FALSE)"
-            $wrongCompiler = ($cacheText -notmatch [regex]::Escape($clangExe)) -and
+            $wrongCompiler = ($cacheText -notmatch [regex]::Escape($expectedCCompiler)) -and
                              ($cacheText -match "CMAKE_C_COMPILER:FILEPATH=")
             if ($gccCached -or $cxxBroken -or $wrongCompiler) {
                 $label = $_.Name.Substring(0, [Math]::Min(40, $_.Name.Length))
@@ -156,15 +150,18 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
                 Get-ChildItem -LiteralPath $_.FullName -Filter "libggml.a" -Recurse -ErrorAction SilentlyContinue |
                     Select-Object -First 1)
 
-            # Scenario C: cmake cache has stale -stdlib=libstdc++ from a previous
-            # failed attempt to fix the libc++ ABI mismatch via cmake flags.
-            # That flag breaks cmake's CXX compiler detection test (lld can't find
-            # libstdc++).  Clear the cmake dir so it reconfigures cleanly; the ABI
-            # fix is now applied at the Rust link step via RUSTFLAGS instead.
+            # Scenario C: cmake cache has stale -stdlib=libstdc++ or a clang compiler
+            # path (from a previous failed attempt with llvm-mingw clang++).
+            # Clear so it reconfigures with the current MinGW g++ toolchain.
             $scenarioC = $false
             if ($cacheExists) {
                 $ct = Get-Content -LiteralPath $cacheFile -Raw -ErrorAction SilentlyContinue
-                if ($ct -and ($ct -match "-stdlib=libstdc\+\+")) { $scenarioC = $true }
+                if ($ct -and (
+                    ($ct -match "-stdlib=libstdc\+\+") -or
+                    ($ct -match "clang(?:\+\+)?\.exe") -or
+                    ($ct -notmatch [regex]::Escape($expectedCCompiler) -and
+                     $ct -match "CMAKE_C_COMPILER:FILEPATH=")
+                )) { $scenarioC = $true }
             }
 
             # Scenario A: cmake ran but the compiled library is absent anywhere
@@ -174,7 +171,7 @@ if (Test-Path -LiteralPath $cargoBuildDir) {
 
             if ($scenarioA -or $scenarioB -or $scenarioC) {
                 $reason = if ($scenarioA) { "cmake built but libggml.a missing" } `
-                     elseif ($scenarioC) { "cmake cache has stale -stdlib=libstdc++ -- reconfiguring" } `
+                     elseif ($scenarioC) { "cmake cache has stale clang path or flags -- reconfiguring with MinGW g++" } `
                           else            { "cmake dir absent -- will build from scratch" }
                 Write-Host "    whisper-rs-sys: $reason" -ForegroundColor Yellow
                 if (Test-Path -LiteralPath $cmakeOut) {
