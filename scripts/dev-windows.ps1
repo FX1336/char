@@ -38,10 +38,19 @@ $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.e
 if (-not (Test-Path $vswhere)) {
     Write-Fail "vswhere.exe not found. Run .\scripts\setup-windows.ps1 first."
 }
-$vsPath = & $vswhere -latest -requires Microsoft.VisualStudio.Workload.VCTools `
+# -products * includes Build Tools; use component ID which is more reliable
+# than the workload ID for standalone Build Tools installations.
+$vsPath = & $vswhere -latest -products * `
+    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
     -property installationPath 2>$null
 if (-not $vsPath) {
-    Write-Fail "VS Build Tools with VCTools workload not found. Run .\scripts\setup-windows.ps1 first."
+    # Fallback: workload-based query
+    $vsPath = & $vswhere -latest -products * `
+        -requires Microsoft.VisualStudio.Workload.VCTools `
+        -property installationPath 2>$null
+}
+if (-not $vsPath) {
+    Write-Fail "VS Build Tools not found. Run .\scripts\setup-windows.ps1 first."
 }
 $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
 if (-not (Test-Path $vcvars)) {

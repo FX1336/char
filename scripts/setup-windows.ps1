@@ -74,12 +74,23 @@ if ($wv2) {
 # No MinGW or separate compiler download needed.
 Write-Step "Visual Studio Build Tools 2022"
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-$vsInstalled = $false
-if (Test-Path $vswhere) {
-    $vsPath = & $vswhere -latest -requires Microsoft.VisualStudio.Workload.VCTools `
+# -products * includes Build Tools (not just full VS editions).
+# -requires the specific MSVC compiler component, not the workload ID,
+# because Build Tools registers components differently from full VS.
+function Find-VsPath {
+    if (-not (Test-Path $vswhere)) { return $null }
+    $p = & $vswhere -latest -products * `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
         -property installationPath 2>$null
-    $vsInstalled = ($null -ne $vsPath -and $vsPath -ne "")
+    if ($p) { return $p }
+    # Fallback: any VS installation with VCTools workload
+    return & $vswhere -latest -products * `
+        -requires Microsoft.VisualStudio.Workload.VCTools `
+        -property installationPath 2>$null
 }
+$vsInstalled = $false
+$vsPath = Find-VsPath
+if ($vsPath) { $vsInstalled = $true }
 if ($vsInstalled) {
     Write-Skip "VS Build Tools ($vsPath)"
 } else {
@@ -102,11 +113,8 @@ if ($vsInstalled) {
     Write-Ok "VS Build Tools 2022 installed"
 }
 
-# Refresh vswhere path after install
-if (Test-Path $vswhere) {
-    $vsPath = & $vswhere -latest -requires Microsoft.VisualStudio.Workload.VCTools `
-        -property installationPath 2>$null
-}
+# Refresh after install
+$vsPath = Find-VsPath
 if (-not $vsPath) {
     Write-Host "  ERROR: VS Build Tools not found after installation." -ForegroundColor Red
     exit 1
