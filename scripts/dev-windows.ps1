@@ -132,30 +132,32 @@ if ($env:CHAR_TARGET_DIR) {
     }
 }
 
-# -- Unlock libsql-ffi registry source -----------------------------------------
-# libsql-ffi build.rs copies its bundled source to OUT_DIR using `cp -R
-# --no-preserve=mode,ownership` on Unix.  On Windows that falls back to
-# Rust's fs::copy, which *preserves* read-only attributes from the Cargo
-# registry.  A second write to the already-copied (read-only) sqlite3.c
-# then fails with "Zugriff verweigert" (os error 5).  Unlocking both the
-# registry source and any stale OUT_DIR lets all copies succeed.
+# -- Fix libsql-ffi Windows read-only issue ------------------------------------
+# libsql-ffi build.rs copies its bundled source to OUT_DIR/sqlite3mc using
+# `cp -R --no-preserve=mode,ownership` (Unix).  On Windows, cp is absent so
+# it falls back to Rust's fs::copy, which PRESERVES the read-only attribute
+# that Cargo sets on registry sources.  Any subsequent write to the already-
+# copied (read-only) sqlite3.c fails with os error 5 (Zugriff verweigert).
+#
+# Fix:
+#  1. Use `attrib -R /S /D` to strip read-only from the registry source so
+#     fresh copies land as writable.  (PowerShell .IsReadOnly = $false is
+#     unreliable on NTFS; attrib directly calls SetFileAttributes.)
+#  2. Delete any stale sqlite3mc staging dir from a prior failed build run
+#     so the build script always starts with a clean destination.
 $libsqlFfiSrc = Get-ChildItem `
     "$env:USERPROFILE\.cargo\registry\src\*\libsql-ffi-*" `
     -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($libsqlFfiSrc) {
-    Get-ChildItem -Recurse -LiteralPath $libsqlFfiSrc.FullName -File |
-        Where-Object IsReadOnly |
-        ForEach-Object { $_.IsReadOnly = $false }
+    $null = cmd /c "attrib -R `"$($libsqlFfiSrc.FullName)\*`" /S /D 2>&1"
     Write-Host "  Unlocked libsql-ffi registry source: $($libsqlFfiSrc.Name)"
 }
-# Also unlock any read-only files left in the build output from a prior run.
 if ($env:CARGO_TARGET_DIR) {
-    Get-ChildItem "$env:CARGO_TARGET_DIR\debug\build\libsql-ffi-*" `
+    Get-ChildItem "$env:CARGO_TARGET_DIR\debug\build\libsql-ffi-*\out\sqlite3mc" `
         -Directory -ErrorAction SilentlyContinue |
         ForEach-Object {
-            Get-ChildItem -Recurse -LiteralPath $_.FullName -File |
-                Where-Object IsReadOnly |
-                ForEach-Object { $_.IsReadOnly = $false }
+            Remove-Item -Recurse -Force -LiteralPath $_.FullName -ErrorAction SilentlyContinue
+            Write-Host "  Removed stale sqlite3mc staging dir from prior run"
         }
 }
 
