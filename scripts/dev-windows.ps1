@@ -132,6 +132,23 @@ if ($env:CHAR_TARGET_DIR) {
     }
 }
 
+# -- Unlock libsql-ffi registry source -----------------------------------------
+# libsql-ffi build.rs copies its bundled source to OUT_DIR using `cp -R
+# --no-preserve=mode,ownership` on Unix.  On Windows that falls back to
+# Rust's fs::copy, which *preserves* read-only attributes from the Cargo
+# registry.  A second write to the already-copied (read-only) sqlite3.c
+# then fails with "Zugriff verweigert" (os error 5).  Unlocking here lets
+# fs::copy produce writable files so the build can proceed.
+$libsqlFfiSrc = Get-ChildItem `
+    "$env:USERPROFILE\.cargo\registry\src\*\libsql-ffi-*" `
+    -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($libsqlFfiSrc) {
+    Get-ChildItem -Recurse -LiteralPath $libsqlFfiSrc.FullName -File |
+        Where-Object IsReadOnly |
+        ForEach-Object { $_.IsReadOnly = $false }
+    Write-Host "  Unlocked libsql-ffi registry source: $($libsqlFfiSrc.Name)"
+}
+
 # -- Activate fnm Node version -------------------------------------------------
 $fnmExe = "$LOCAL_BIN\fnm.exe"
 if (Test-Path $fnmExe) {
