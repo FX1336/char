@@ -363,107 +363,9 @@ if (Test-Path $ortCache) {
 }
 
 # ---------------------------------------------------------------------------
-# cp.exe is the ROOT CAUSE of the libsql-ffi os error 5 on Windows.
-# libsql-ffi build.rs calls Command::new("cp") to copy SQLite3MultipleCiphers.
-# PowerShell's "cp" alias (Copy-Item) is NOT visible to Rust subprocesses --
-# only real .exe files in PATH are found.  Without cp.exe:
-#   1. Command::new("cp") fails (os error 2 / not found)
-#   2. Fallback: fs::copy(SQLite3MultipleCiphers_dir, sqlite3mc_dir)
-#   3. CopyFileExW on a directory source -> ERROR_ACCESS_DENIED (os error 5)
-#   4. match arm `Err(e) if e.kind() == InvalidInput` does NOT match -> .unwrap() panics
-# dev-windows.ps1 adds Git's usr\bin\cp.exe to PATH to fix this.
-Write-Section "cp.exe (ROOT CAUSE of libsql-ffi os error 5)"
-
-# Look for a real cp.exe binary, not a PS alias.
-$realCpExe = $null
-$gitCpCandidates = @(
-    "$env:ProgramFiles\Git\usr\bin\cp.exe",
-    "${env:ProgramFiles(x86)}\Git\usr\bin\cp.exe",
-    "$env:LOCALAPPDATA\Programs\Git\usr\bin\cp.exe"
-)
-# First check PATH for cp.exe specifically (not alias)
-$cpInPath = $env:PATH.Split(";") | Where-Object { $_ -and (Test-Path (Join-Path $_ "cp.exe")) } | Select-Object -First 1
-if ($cpInPath) {
-    $realCpExe = Join-Path $cpInPath "cp.exe"
-} else {
-    # Not in PATH - check known Git locations
-    $gitCpCandidates | ForEach-Object {
-        if (-not $realCpExe -and (Test-Path $_)) { $realCpExe = $_ }
-    }
-}
-
-if ($realCpExe) {
-    $noPreserveSupport = (& $realCpExe --help 2>&1) -match "no-preserve"
-    if ($noPreserveSupport) {
-        if ($cpInPath) {
-            # Extra check: adding all of Git usr\bin to PATH also exposes link.exe
-            # (GNU linker) which shadows MSVC link.exe and breaks all linking.
-            # dev-windows.ps1 copies only cp.exe to an isolated dir instead.
-            $linkInSameDir = Test-Path (Join-Path $cpInPath "link.exe")
-            if ($linkInSameDir) {
-                WARN "cp.exe dir ($cpInPath) also contains link.exe"
-                WARN "  Git link.exe in PATH would shadow MSVC link.exe and break all crate builds"
-                INFO "  dev-windows.ps1 copies only cp.exe to an isolated dir to avoid this"
-            } else {
-                OK "cp.exe in PATH with --no-preserve support: $realCpExe"
-                INFO "libsql-ffi will use cp.exe and copy correctly  -  os error 5 will NOT occur"
-            }
-        } else {
-            WARN "cp.exe exists at $realCpExe but is NOT in PATH"
-            WARN "libsql-ffi Command::new('cp') will fail  -  dev-windows.ps1 isolates cp.exe automatically"
-        }
-    } else {
-        WARN "cp.exe found ($realCpExe) but lacks --no-preserve  -  may not copy directories correctly"
-    }
-} else {
-    FAIL "cp.exe not found anywhere (Git for Windows not installed?)"
-    FAIL "  This is the ROOT CAUSE of libsql-ffi os error 5 at build.rs:465"
-    INFO "  Install Git for Windows: https://git-scm.com/download/win"
-    INFO "  dev-windows.ps1 will then isolate cp.exe automatically"
-    $psAlias = Get-Command cp -ErrorAction SilentlyContinue
-    if ($psAlias -and -not $psAlias.Source) {
-        INFO "  NOTE: PowerShell has a 'cp' alias (Copy-Item) but Rust subprocesses cannot use it"
-    }
-}
-
-# ---------------------------------------------------------------------------
-# Check that MSVC link.exe is not shadowed by Git's link.exe in PATH.
-# Adding Git usr\bin to PATH exposes GNU link which breaks MSVC linking.
-Write-Section "link.exe conflict check (MSVC vs Git)"
-$allLinkExe = $env:PATH.Split(";") | Where-Object { $_ } |
-    ForEach-Object { $p = Join-Path $_ "link.exe"; if (Test-Path $p) { $p } }
-if ($allLinkExe.Count -eq 0) {
-    WARN "link.exe not found in PATH  -  vcvars64 may not be loaded"
-} elseif ($allLinkExe.Count -eq 1) {
-    $lnk = $allLinkExe[0]
-    $isGitLink = $lnk -match "Git\\usr\\bin" -or $lnk -match "/usr/bin"
-    if ($isGitLink) {
-        FAIL "Only link.exe found is Git's GNU linker: $lnk"
-        FAIL "  This will break ALL MSVC builds  -  load vcvars64 first and ensure Git usr\bin is NOT in PATH"
-    } else {
-        OK "link.exe: $lnk"
-    }
-} else {
-    INFO "Multiple link.exe found in PATH order:"
-    $first = $true
-    foreach ($lnk in $allLinkExe) {
-        $isGitLink = $lnk -match "Git\\usr\\bin" -or $lnk -match "/usr/bin"
-        $label = if ($isGitLink) { "[Git/GNU - WRONG]" } else { "[MSVC]" }
-        INFO "  $label $lnk"
-        if ($first -and $isGitLink) {
-            FAIL "Git link.exe appears BEFORE MSVC link.exe  -  will break all crate builds"
-            INFO "  dev-windows.ps1 must NOT add all of Git usr\bin to PATH"
-        }
-        $first = $false
-    }
-    $firstIsGit = ($allLinkExe[0] -match "Git\\usr\\bin") -or ($allLinkExe[0] -match "/usr/bin")
-    if (-not $firstIsGit) {
-        OK "MSVC link.exe is first in PATH  -  no conflict"
-    }
-}
-
-# ---------------------------------------------------------------------------
 # Load vcvars64 to check MSVC tools in context, just like dev-windows.ps1 does.
+# cp.exe and link.exe checks MUST come after this so $env:PATH reflects the
+# real build environment.
 Write-Section "PATH after vcvars64 (MSVC tools)"
 $vcvarsLoaded = $false
 if ($vsPath) {
@@ -486,6 +388,87 @@ foreach ($tool in @("cargo", "cl", "cmake", "ninja", "link", "rc")) {
     if ($found) { OK "$tool : $($found.Source)" }
     elseif ($vcvarsLoaded) { FAIL "$tool.exe not found even after vcvars64  -  VS installation may be incomplete" }
     else { WARN "$tool.exe not found (vcvars64 could not be loaded  -  check VS Build Tools section above)" }
+}
+
+# ---------------------------------------------------------------------------
+# Check that MSVC link.exe is not shadowed by Git's link.exe in PATH.
+# Must run after vcvars64 is loaded so MSVC link.exe is visible.
+Write-Section "link.exe conflict check (MSVC vs Git)"
+$allLinkExe = $env:PATH.Split(";") | Where-Object { $_ } |
+    ForEach-Object { $p = Join-Path $_ "link.exe"; if (Test-Path $p) { $p } }
+if ($allLinkExe.Count -eq 0) {
+    FAIL "link.exe not found in PATH even after vcvars64  -  VS installation may be incomplete"
+} elseif ($allLinkExe.Count -eq 1) {
+    $lnk = $allLinkExe[0]
+    $isGitLink = $lnk -match "Git\\usr\\bin" -or $lnk -match "/usr/bin"
+    if ($isGitLink) {
+        FAIL "Only link.exe in PATH is Git's GNU linker: $lnk"
+        FAIL "  This breaks ALL MSVC builds  -  do not add Git usr\bin to PATH"
+    } else {
+        OK "link.exe: $lnk"
+    }
+} else {
+    INFO "Multiple link.exe found in PATH order:"
+    $first = $true
+    foreach ($lnk in $allLinkExe) {
+        $isGitLink = $lnk -match "Git\\usr\\bin" -or $lnk -match "/usr/bin"
+        $label = if ($isGitLink) { "[Git/GNU - WRONG]" } else { "[MSVC]" }
+        INFO "  $label $lnk"
+        if ($first -and $isGitLink) {
+            FAIL "Git link.exe appears BEFORE MSVC link.exe  -  will break all crate builds"
+            INFO "  dev-windows.ps1 must NOT add all of Git usr\bin to PATH"
+        }
+        $first = $false
+    }
+    $firstIsGit = ($allLinkExe[0] -match "Git\\usr\\bin") -or ($allLinkExe[0] -match "/usr/bin")
+    if (-not $firstIsGit) { OK "MSVC link.exe is first in PATH  -  no conflict" }
+}
+
+# ---------------------------------------------------------------------------
+# cp.exe check.  Must run after vcvars64 so PATH matches actual build context.
+# dev-windows.ps1 copies only cp.exe (not all of Git usr\bin) to an isolated
+# dir and prepends it.  When running diagnose standalone that isolation is not
+# active, so "not in PATH" here is expected and not actionable.
+Write-Section "cp.exe (libsql-ffi os error 5 fix)"
+$realCpExe = $null
+$gitCpCandidates = @(
+    "$env:ProgramFiles\Git\usr\bin\cp.exe",
+    "${env:ProgramFiles(x86)}\Git\usr\bin\cp.exe",
+    "$env:LOCALAPPDATA\Programs\Git\usr\bin\cp.exe"
+)
+$cpInPath = $env:PATH.Split(";") | Where-Object { $_ -and (Test-Path (Join-Path $_ "cp.exe")) } | Select-Object -First 1
+if ($cpInPath) {
+    $realCpExe = Join-Path $cpInPath "cp.exe"
+} else {
+    $gitCpCandidates | ForEach-Object { if (-not $realCpExe -and (Test-Path $_)) { $realCpExe = $_ } }
+}
+
+if ($realCpExe) {
+    $noPreserveSupport = (& $realCpExe --help 2>&1) -match "no-preserve"
+    if ($noPreserveSupport) {
+        if ($cpInPath) {
+            $linkInSameDir = Test-Path (Join-Path $cpInPath "link.exe")
+            if ($linkInSameDir) {
+                FAIL "cp.exe dir ($cpInPath) also contains link.exe (Git usr\bin added wholesale)"
+                FAIL "  Git link.exe in PATH breaks all MSVC builds  -  dev-windows.ps1 isolates cp.exe"
+            } else {
+                OK "cp.exe in PATH, --no-preserve supported: $realCpExe"
+            }
+        } else {
+            OK "Git cp.exe available at $realCpExe"
+            INFO "  Not in PATH here (diagnose runs standalone)  -  dev-windows.ps1 isolates it automatically"
+        }
+    } else {
+        WARN "cp.exe found ($realCpExe) but lacks --no-preserve  -  may not copy directories correctly"
+    }
+} else {
+    FAIL "cp.exe not found (Git for Windows not installed?)"
+    FAIL "  This is the ROOT CAUSE of libsql-ffi os error 5 at build.rs:465"
+    INFO "  Install Git for Windows: https://git-scm.com/download/win"
+    $psAlias = Get-Command cp -ErrorAction SilentlyContinue
+    if ($psAlias -and -not $psAlias.Source) {
+        INFO "  NOTE: PowerShell has a 'cp' alias (Copy-Item) but Rust subprocesses cannot use it"
+    }
 }
 
 # ---------------------------------------------------------------------------
