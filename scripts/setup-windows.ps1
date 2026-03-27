@@ -172,7 +172,30 @@ Write-Step "Rust toolchain"
 if (-not (Test-Command "rustup")) {
     Write-Host "    Installing Rust via rustup-init..."
     $rustupInit = Join-Path $env:TEMP "rustup-init.exe"
-    Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile $rustupInit
+    $rustupUrls = @(
+        "https://win.rustup.rs/x86_64",
+        "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe"
+    )
+    $downloaded = $false
+    foreach ($url in $rustupUrls) {
+        try {
+            Write-Host "    Trying $url ..."
+            Invoke-WebRequest -Uri $url -OutFile $rustupInit -ErrorAction Stop
+            $downloaded = $true
+            break
+        } catch {
+            Write-Host "    Failed: $_"
+        }
+    }
+    if (-not $downloaded) {
+        Write-Host ""
+        Write-Host "  ERROR: Could not download rustup-init.exe." -ForegroundColor Red
+        Write-Host "  Both URLs failed — likely a network/proxy/firewall issue." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  Manual option: download rustup-init.exe on another machine," -ForegroundColor Yellow
+        Write-Host "  copy it to $rustupInit, then re-run this script." -ForegroundColor Yellow
+        exit 1
+    }
     & $rustupInit -y --default-toolchain "$RUST_VERSION" --default-host x86_64-pc-windows-gnu --component rust-analyzer,rustfmt,clippy
     try { Remove-Item -LiteralPath $rustupInit -Force -ErrorAction SilentlyContinue } catch {}
     $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
