@@ -75,18 +75,68 @@ $env:ORT_LIB_LOCATION = $ORT_DIR
 $env:ORT_PREFER_DYNAMIC_LINK = "1"
 $env:PATH = "$ORT_DIR\lib;$env:PATH"
 
-# CARGO_TARGET_DIR: AppLocker/WDAC policies (os error 4551) block execution of
-# unsigned build-script binaries from certain paths.  Try candidate paths in
-# order; use the first one that is not on a blocked volume/path.
-# Precedence: env override > AppData\Local > TEMP > default (.cargo\target).
+# CARGO_TARGET_DIR: AppLocker/WDAC (os error 4551) blocks unsigned build-script
+# executables compiled by Rust from certain paths.  We probe candidate paths by
+# writing and executing a tiny test batch file.  First path that allows execution
+# wins.  Set CHAR_TARGET_DIR to skip probing and force a specific path.
+function Test-ExecAllowed($dir) {
+    $probe = Join-Path $dir "_exec_probe.bat"
+    try {
+        $null = New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop
+        "@echo off" | Set-Content -LiteralPath $probe -Encoding ASCII
+        $result = & cmd /c $probe 2>&1
+        return $true
+    } catch {
+        return $false
+    } finally {
+        try { Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue } catch {}
+    }
+}
+
 if ($env:CHAR_TARGET_DIR) {
     $env:CARGO_TARGET_DIR = $env:CHAR_TARGET_DIR
     Write-Host "  CARGO_TARGET_DIR (override): $env:CARGO_TARGET_DIR"
 } else {
-    # AppData\Local is often whitelisted by path-based AppLocker EXE rules.
-    $env:CARGO_TARGET_DIR = "$env:LOCALAPPDATA\char-build"
-    Write-Host "  CARGO_TARGET_DIR: $env:CARGO_TARGET_DIR"
-    Write-Host "  (set CHAR_TARGET_DIR env var to override if still blocked)"
+    $candidates = @(
+        "$env:LOCALAPPDATA\char-build",
+        "$env:TEMP\char-build",
+        "$env:USERPROFILE\Documents\char-build",
+        "$env:USERPROFILE\.cargo\target\char-desktop"
+    )
+    $chosen = $null
+    foreach ($c in $candidates) {
+        if (Test-ExecAllowed $c) {
+            $chosen = $c
+            break
+        }
+        Write-Host "  [blocked] $c"
+    }
+    if ($chosen) {
+        $env:CARGO_TARGET_DIR = $chosen
+        Write-Host "  CARGO_TARGET_DIR: $env:CARGO_TARGET_DIR"
+    } else {
+        Write-Host ""
+        Write-Host "  ERROR: All candidate build directories are blocked by AppLocker/WDAC." -ForegroundColor Red
+        Write-Host "  Rust build scripts cannot run from any user-writable path." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  Ask IT to add ONE of these path rules to the AppLocker EXE policy:" -ForegroundColor Yellow
+        foreach ($c in $candidates) {
+            Write-Host "    $c\*" -ForegroundColor Yellow
+        }
+        Write-Host ""
+        Write-Host "  Or set CHAR_TARGET_DIR to a path that is already whitelisted:" -ForegroundColor Yellow
+        Write-Host "    [System.Environment]::SetEnvironmentVariable('CHAR_TARGET_DIR','D:\allowed-path\char-build','User')" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Current effective AppLocker policy (EXE rules):" -ForegroundColor Cyan
+        try {
+            Get-AppLockerPolicy -Effective -Xml 2>$null |
+                Select-String -Pattern 'FilePathRule|FilePath Path=' |
+                ForEach-Object { Write-Host "    $_" }
+        } catch {
+            Write-Host "    (could not read AppLocker policy — may be WDAC)" -ForegroundColor DarkGray
+        }
+        exit 1
+    }
 }
 
 # cmake verbose makefile: causes make to print every compiler invocation.
