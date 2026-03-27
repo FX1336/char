@@ -35,12 +35,12 @@ INFO "Repo: $REPO_ROOT"
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if ($isAdmin) { OK "Running as Administrator (required for setup-windows.ps1)" }
-else          { WARN "Not running as Administrator — setup-windows.ps1 will fail without admin rights" }
+else          { WARN "Not running as Administrator  -  setup-windows.ps1 will fail without admin rights" }
 
 $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -eq "$env:SystemDrive\" }
 if ($drives) {
     $freeGB = [math]::Round($drives.Free / 1GB, 1)
-    if ($freeGB -lt 15) { WARN "Only ${freeGB} GB free on $env:SystemDrive — Rust builds need ~10-15 GB" }
+    if ($freeGB -lt 15) { WARN "Only ${freeGB} GB free on $env:SystemDrive  -  Rust builds need ~10-15 GB" }
     else                { OK "${freeGB} GB free on $env:SystemDrive" }
 }
 
@@ -55,13 +55,13 @@ if (-not $wv2) {
         -ErrorAction SilentlyContinue
 }
 if ($wv2) { OK "WebView2 installed" }
-else      { WARN "WebView2 not found — app will not start without it (usually pre-installed on Win10/11)" }
+else      { WARN "WebView2 not found  -  app will not start without it (usually pre-installed on Win10/11)" }
 
 # ---------------------------------------------------------------------------
 Write-Section "Visual Studio Build Tools 2022"
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {
-    FAIL "vswhere.exe not found — VS Build Tools not installed"
+    FAIL "vswhere.exe not found  -  VS Build Tools not installed"
 } else {
     OK "vswhere.exe found"
     $vsPath = & $vswhere -latest -products * `
@@ -82,10 +82,10 @@ if (-not (Test-Path $vswhere)) {
             $clPath = ($envDump | Where-Object { $_ -match "^Path=" } | Select-Object -First 1) -replace "^Path=",""
             $hasVcDir = ($envDump | Where-Object { $_ -match "^VCINSTALLDIR=" }).Count -gt 0
             $hasWinSdk = ($envDump | Where-Object { $_ -match "^WindowsSdkDir=" }).Count -gt 0
-            if ($hasVcDir)  { OK "vcvars64 loads correctly — VCINSTALLDIR set" }
-            else            { FAIL "vcvars64 loaded but VCINSTALLDIR not set — broken VS installation?" }
+            if ($hasVcDir)  { OK "vcvars64 loads correctly  -  VCINSTALLDIR set" }
+            else            { FAIL "vcvars64 loaded but VCINSTALLDIR not set  -  broken VS installation?" }
             if ($hasWinSdk) { OK "Windows SDK dir set by vcvars64" }
-            else            { WARN "WindowsSdkDir not set — Windows SDK may be missing" }
+            else            { WARN "WindowsSdkDir not set  -  Windows SDK may be missing" }
         } else {
             FAIL "vcvars64.bat MISSING at: $vcvars"
         }
@@ -99,34 +99,34 @@ if (-not (Test-Path $vswhere)) {
 Write-Section "Rust toolchain"
 $cargoPath = Get-Command cargo -ErrorAction SilentlyContinue
 if (-not $cargoPath) {
-    FAIL "cargo not found — add ~/.cargo/bin to PATH or run setup-windows.ps1"
+    FAIL "cargo not found  -  add ~/.cargo/bin to PATH or run setup-windows.ps1"
 } else {
     OK "cargo: $(cargo --version 2>&1)"
     # Check active toolchain
     $activeToolchain = rustup show active-toolchain 2>&1
     INFO "Active toolchain: $activeToolchain"
     if ($activeToolchain -match "msvc") { OK "MSVC toolchain active" }
-    else { FAIL "Non-MSVC toolchain active — expected x86_64-pc-windows-msvc, got: $activeToolchain" }
+    else { FAIL "Non-MSVC toolchain active  -  expected x86_64-pc-windows-msvc, got: $activeToolchain" }
     # Check exact version
     $cargoVer = (cargo --version 2>&1) -replace "cargo ","" -replace " .*",""
     if ($cargoVer -eq $RUST_VERSION) { OK "Rust version matches required $RUST_VERSION" }
-    else { WARN "Rust version is $cargoVer, expected $RUST_VERSION — run: rustup default ${RUST_VERSION}-x86_64-pc-windows-msvc" }
+    else { WARN "Rust version is $cargoVer, expected $RUST_VERSION  -  run: rustup default ${RUST_VERSION}-x86_64-pc-windows-msvc" }
     # Check installed components
     $components = rustup component list --installed 2>&1
     foreach ($comp in @("rust-analyzer", "rustfmt", "clippy")) {
         if ($components -match $comp) { OK "Component installed: $comp" }
-        else { WARN "Component missing: $comp — run: rustup component add $comp" }
+        else { WARN "Component missing: $comp  -  run: rustup component add $comp" }
     }
     # Check target explicitly installed
     $targets = rustup target list --installed 2>&1
     if ($targets -match "x86_64-pc-windows-msvc") { OK "Target x86_64-pc-windows-msvc installed" }
-    else { FAIL "Target x86_64-pc-windows-msvc not installed — run: rustup target add x86_64-pc-windows-msvc" }
+    else { FAIL "Target x86_64-pc-windows-msvc not installed  -  run: rustup target add x86_64-pc-windows-msvc" }
 }
 
 # ---------------------------------------------------------------------------
 Write-Section "libclang (for bindgen)"
 if (Test-Path "$LIBCLANG_DIR\libclang.dll") { OK "libclang.dll at $LIBCLANG_DIR" }
-else { FAIL "libclang.dll missing at $LIBCLANG_DIR — run setup-windows.ps1" }
+else { FAIL "libclang.dll missing at $LIBCLANG_DIR  -  run setup-windows.ps1" }
 
 # ---------------------------------------------------------------------------
 Write-Section "fnm + Node.js + pnpm"
@@ -135,39 +135,39 @@ if (Test-Path $fnmExe) {
     OK "fnm found: $fnmExe"
     & $fnmExe env --shell powershell 2>$null | Out-String | Invoke-Expression
 } else {
-    WARN "fnm not found at $fnmExe — run setup-windows.ps1"
+    WARN "fnm not found at $fnmExe  -  run setup-windows.ps1"
 }
 
 $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
     $nodeVer = (node --version) -replace "^v","" -split "\." | Select-Object -First 1
     if ([int]$nodeVer -ge $NODE_MAJOR) { OK "node $(node --version)" }
-    else { FAIL "node $(node --version) — need v${NODE_MAJOR}+, run: fnm install $NODE_MAJOR" }
-} else { FAIL "node not found — run setup-windows.ps1" }
+    else { FAIL "node $(node --version)  -  need v${NODE_MAJOR}+, run: fnm install $NODE_MAJOR" }
+} else { FAIL "node not found  -  run setup-windows.ps1" }
 
 $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
 if ($pnpm) { OK "pnpm $(pnpm --version)" }
-else       { FAIL "pnpm not found — run: npm install -g pnpm" }
+else       { FAIL "pnpm not found  -  run: npm install -g pnpm" }
 
 # ---------------------------------------------------------------------------
 Write-Section "Project dependencies"
 $nmPath = Join-Path $REPO_ROOT "node_modules"
 if (Test-Path $nmPath) { OK "node_modules present at repo root" }
-else { FAIL "node_modules missing — run: pnpm install --frozen-lockfile" }
+else { FAIL "node_modules missing  -  run: pnpm install --frozen-lockfile" }
 
 # Check @hypr/ui CSS build output
 $uiDist = Join-Path $REPO_ROOT "packages\ui\dist"
 if (Test-Path $uiDist) {
     $cssFiles = @(Get-ChildItem $uiDist -Filter "*.css" -ErrorAction SilentlyContinue)
     if ($cssFiles.Count -gt 0) { OK "@hypr/ui CSS built ($($cssFiles.Count) file(s) in $uiDist)" }
-    else { WARN "@hypr/ui dist exists but no .css files — run: pnpm -F @hypr/ui build" }
-} else { WARN "@hypr/ui not built — run: pnpm -F @hypr/ui build" }
+    else { WARN "@hypr/ui dist exists but no .css files  -  run: pnpm -F @hypr/ui build" }
+} else { WARN "@hypr/ui not built  -  run: pnpm -F @hypr/ui build" }
 
 # ---------------------------------------------------------------------------
 Write-Section "libsql-ffi registry source (read-only / os error 5)"
 $regSrcRoot = Join-Path $env:USERPROFILE ".cargo\registry\src"
 if (-not (Test-Path $regSrcRoot)) {
-    WARN "Cargo registry src not found — not downloaded yet (run cargo fetch or let the build pull it)"
+    WARN "Cargo registry src not found  -  not downloaded yet (run cargo fetch or let the build pull it)"
 } else {
     $libsqlFfiSrc = Get-ChildItem $regSrcRoot -Directory -ErrorAction SilentlyContinue |
         ForEach-Object { Get-ChildItem $_.FullName -Filter "libsql-ffi-*" -Directory -ErrorAction SilentlyContinue } |
@@ -180,15 +180,15 @@ if (-not (Test-Path $regSrcRoot)) {
         $roFiles  = @($allFiles | Where-Object IsReadOnly)
         INFO "Files: $($allFiles.Count) total, $($roFiles.Count) read-only"
         if ($roFiles.Count -gt 0) {
-            WARN "$($roFiles.Count) read-only files — attrib fix in dev-windows.ps1 must clear these before build"
+            WARN "$($roFiles.Count) read-only files  -  attrib fix in dev-windows.ps1 must clear these before build"
             # Test if attrib actually works here
             $testFile = $roFiles[0]
             & attrib -R "$($libsqlFfiSrc.FullName)" /S /D 2>&1 | Out-Null
             $stillRO = @(Get-ChildItem $libsqlFfiSrc.FullName -Recurse -File -ErrorAction SilentlyContinue | Where-Object IsReadOnly)
             if ($stillRO.Count -eq 0) {
-                OK "attrib -R works — read-only attributes removed successfully"
+                OK "attrib -R works  -  read-only attributes removed successfully"
             } else {
-                FAIL "attrib -R did NOT remove all read-only flags ($($stillRO.Count) still read-only) — ACL restriction?"
+                FAIL "attrib -R did NOT remove all read-only flags ($($stillRO.Count) still read-only)  -  ACL restriction?"
                 try {
                     $acl = Get-Acl $stillRO[0].FullName
                     INFO "Owner of blocked file: $($acl.Owner)"
@@ -248,7 +248,7 @@ foreach ($c in $candidates) {
             $mcRO = @(Get-ChildItem $mc -Recurse -File -ErrorAction SilentlyContinue | Where-Object IsReadOnly)
             if ($mcRO.Count -gt 0) {
                 FAIL "  sqlite3mc EXISTS with $($mcRO.Count) read-only files at: $mc"
-                INFO "  This causes os error 5 — dev-windows.ps1 must delete this dir before build"
+                INFO "  This causes os error 5  -  dev-windows.ps1 must delete this dir before build"
             } else {
                 OK "  sqlite3mc exists, all files writable: $mc"
             }
@@ -262,7 +262,7 @@ foreach ($c in $candidates) {
     }
 }
 if ($firstAllowed) { INFO "`ndev-windows.ps1 will use: $firstAllowed" }
-else               { FAIL "No candidate path allows exe execution — all paths blocked by AppLocker/WDAC" }
+else               { FAIL "No candidate path allows exe execution  -  all paths blocked by AppLocker/WDAC" }
 
 # ---------------------------------------------------------------------------
 Write-Section "ORT (ONNX Runtime) cache"
@@ -270,9 +270,9 @@ $ortCache = "$env:USERPROFILE\.cache\ort"
 if (Test-Path $ortCache) {
     $ortLibs = @(Get-ChildItem $ortCache -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue)
     if ($ortLibs.Count -gt 0) { OK "ORT already cached ($($ortLibs.Count) DLL(s) in $ortCache)" }
-    else { WARN "ORT cache dir exists but no DLLs — will download on first build (requires internet)" }
+    else { WARN "ORT cache dir exists but no DLLs  -  will download on first build (requires internet)" }
 } else {
-    WARN "ORT not yet cached at $ortCache — will download on first build (~150 MB, requires internet)"
+    WARN "ORT not yet cached at $ortCache  -  will download on first build (~150 MB, requires internet)"
 }
 
 # ---------------------------------------------------------------------------
@@ -282,11 +282,11 @@ if ($cp) {
     OK "cp found: $($cp.Source)"
     $noPreserveSupport = (& cp --help 2>&1) -match "no-preserve"
     if ($noPreserveSupport) { OK "cp supports --no-preserve (libsql-ffi will NOT preserve read-only on copy)" }
-    else { WARN "cp found but does not support --no-preserve — libsql-ffi falls back to fs::copy" }
+    else { WARN "cp found but does not support --no-preserve  -  libsql-ffi falls back to fs::copy" }
 } else {
-    WARN "cp not in PATH — libsql-ffi uses fs::copy fallback (preserves read-only from registry)"
+    WARN "cp not in PATH  -  libsql-ffi uses fs::copy fallback (preserves read-only from registry)"
     $gitCp = "C:\Program Files\Git\usr\bin\cp.exe"
-    if (Test-Path $gitCp) { INFO "  Git cp available at: $gitCp (not in PATH — adding it would fix this permanently)" }
+    if (Test-Path $gitCp) { INFO "  Git cp available at: $gitCp (not in PATH  -  adding it would fix this permanently)" }
 }
 
 # ---------------------------------------------------------------------------
