@@ -44,6 +44,15 @@ $env:CMAKE_CXX_COMPILER = "$MINGW_DIR\bin\x86_64-w64-mingw32-g++.exe"
 $toolchainFile = ($REPO_ROOT -replace '\\', '/') + "/apps/desktop/src-tauri/cmake/windows-gnu.cmake"
 $env:CMAKE_TOOLCHAIN_FILE = $toolchainFile
 
+# cmake generator: the cmake crate auto-detects the generator by probing for
+# sh.exe (MSYS) and mingw32-make.exe (MinGW).  Git for Windows puts sh.exe in
+# PATH, which tricks the cmake crate into choosing "MSYS Makefiles".  That
+# generator needs an MSYS make.exe that is not present, so the cmake build
+# fails silently and the output library is never created.
+# Force "MinGW Makefiles" and point cmake at our mingw32-make.exe directly.
+$env:CMAKE_GENERATOR    = "MinGW Makefiles"
+$env:CMAKE_MAKE_PROGRAM = "$MINGW_DIR\bin\mingw32-make.exe"
+
 # cmake_project_include_before: loaded before every project() call in the build
 # tree.  Our script defers a fix that sets PREFIX "lib" on ggml targets after all
 # targets are defined (overriding ggml/CMakeLists.txt's WIN32 set(CMAKE_STATIC_LIBRARY_PREFIX "")).
