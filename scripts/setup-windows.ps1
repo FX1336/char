@@ -270,6 +270,48 @@ pnpm -F "@hypr/ui" build
 Pop-Location
 Write-Ok "@hypr/ui built"
 
+# -- Git for Windows (cp.exe needed by libsql-ffi build script) ----------------
+# libsql-ffi build.rs uses `cp -R --no-preserve=mode,ownership` to copy its
+# bundled SQLite source.  Rust's Command::new("cp") needs a real cp.exe in
+# PATH.  Git for Windows ships one at usr\bin\cp.exe.  Without it the build
+# falls back to fs::copy(directory) which returns ERROR_ACCESS_DENIED (os
+# error 5) on Windows because CopyFileExW does not accept a directory source.
+Write-Step "Git for Windows (cp.exe)"
+$gitCpCandidates = @(
+    "$env:ProgramFiles\Git\usr\bin\cp.exe",
+    "${env:ProgramFiles(x86)}\Git\usr\bin\cp.exe",
+    "$env:LOCALAPPDATA\Programs\Git\usr\bin\cp.exe"
+)
+$gitCpFound = $gitCpCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($gitCpFound) {
+    Write-Skip "Git cp.exe found at $gitCpFound"
+} else {
+    $gitInstaller = Join-Path $env:TEMP "Git-setup.exe"
+    Write-Host "    Git for Windows not found. Downloading installer (~60 MB)..."
+    try {
+        # Fetch the latest release download URL from the GitHub redirect
+        $latestUrl = "https://github.com/git-for-windows/git/releases/latest/download/Git-64-bit.exe"
+        Invoke-WebRequest -Uri $latestUrl -OutFile $gitInstaller -ErrorAction Stop
+        Write-Host "    Installing Git for Windows (silent)..."
+        $proc = Start-Process -FilePath $gitInstaller -Wait -PassThru -ArgumentList @(
+            "/VERYSILENT", "/NORESTART",
+            "/COMPONENTS=icons,ext\reg\shellhere,assoc",
+            "/o:PathOption=Cmd"
+        )
+        try { Remove-Item -LiteralPath $gitInstaller -Force -ErrorAction SilentlyContinue } catch {}
+        if ($proc.ExitCode -ne 0) {
+            Write-Host "    WARN: Git installer exited with code $($proc.ExitCode)." -ForegroundColor Yellow
+            Write-Host "    Install Git manually: https://git-scm.com/download/win" -ForegroundColor Yellow
+        } else {
+            Write-Ok "Git for Windows installed"
+        }
+    } catch {
+        Write-Host "    WARN: Could not auto-install Git for Windows: $_" -ForegroundColor Yellow
+        Write-Host "    Install manually: https://git-scm.com/download/win" -ForegroundColor Yellow
+        Write-Host "    Then re-run this script." -ForegroundColor Yellow
+    }
+}
+
 # -- Summary -------------------------------------------------------------------
 Write-Host ""
 Write-Host "Setup complete." -ForegroundColor Green

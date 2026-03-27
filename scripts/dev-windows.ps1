@@ -71,6 +71,32 @@ Write-Host "    VS path: $vsPath"
 # -- Additional PATH entries ----------------------------------------------------
 $env:PATH = "$LOCAL_BIN;$env:USERPROFILE\.cargo\bin;$env:PATH"
 
+# -- cp.exe (required by libsql-ffi build script) ------------------------------
+# libsql-ffi build.rs copies SQLite3MultipleCiphers via `cp -R --no-preserve=...`.
+# Without a real cp.exe, Command::new("cp") fails and the code falls back to
+# fs::copy(directory), which on Windows returns ERROR_ACCESS_DENIED (os error 5)
+# because CopyFileExW does not accept a directory as source.  The match arm
+# `Err(err) if err.kind() == io::ErrorKind::InvalidInput` does NOT match
+# PermissionDenied, so copy_dir_all is never called and .unwrap() panics.
+# Git for Windows ships a real cp.exe in usr\bin that handles -R correctly.
+$gitCpCandidates = @(
+    "$env:ProgramFiles\Git\usr\bin",
+    "${env:ProgramFiles(x86)}\Git\usr\bin",
+    "$env:LOCALAPPDATA\Programs\Git\usr\bin"
+)
+$gitUsrBin = $gitCpCandidates | Where-Object { Test-Path (Join-Path $_ "cp.exe") } | Select-Object -First 1
+if ($gitUsrBin) {
+    $env:PATH = "$gitUsrBin;$env:PATH"
+    Write-Host "  cp.exe: $gitUsrBin\cp.exe"
+} else {
+    Write-Host ""
+    Write-Host "  ERROR: cp.exe not found (Git for Windows not installed?)." -ForegroundColor Red
+    Write-Host "  libsql-ffi needs cp.exe to copy its bundled SQLite source." -ForegroundColor Yellow
+    Write-Host "  Install Git for Windows: https://git-scm.com/download/win" -ForegroundColor Yellow
+    Write-Host "  Then re-run this script." -ForegroundColor Yellow
+    exit 1
+}
+
 # -- libclang for bindgen -------------------------------------------------------
 $env:LIBCLANG_PATH = $LIBCLANG_DIR
 
@@ -144,17 +170,11 @@ if ($isAdminDev -and $env:CARGO_TARGET_DIR) {
     }
 }
 
-# -- Fix libsql-ffi Windows read-only issue ------------------------------------
-# libsql-ffi build.rs copies its bundled source to OUT_DIR/sqlite3mc using
-# `cp -R --no-preserve=mode,ownership` (Unix).  On Windows, cp is absent so
-# it falls back to Rust's fs::copy, which PRESERVES the read-only attribute
-# that Cargo sets on registry sources.  Any subsequent write to the already-
-# copied (read-only) file fails with os error 5 (Zugriff verweigert).
-#
-# Fix 1: attrib.exe -R strips read-only from the registry source so fresh
-#         copies land as writable.
-# Fix 2: Delete the stale sqlite3mc staging dir so the build script always
-#         writes into a clean, non-read-only destination.
+# -- Fix libsql-ffi Windows leftover state -------------------------------------
+# Now that cp.exe is in PATH, libsql-ffi will use the Unix path correctly.
+# Belt-and-suspenders: also strip read-only from the registry source and delete
+# any stale sqlite3mc staging dir from earlier failed builds, so the build
+# script always starts from a clean writable state.
 #
 # NOTE: PS5.1 does NOT expand wildcards in the middle of a path, so
 #       Get-ChildItem "dir\glob-*\sub\dir" silently returns nothing.

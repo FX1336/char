@@ -363,22 +363,59 @@ if (Test-Path $ortCache) {
 }
 
 # ---------------------------------------------------------------------------
-Write-Section "cp.exe (libsql-ffi copy_with_cp behavior)"
-$cp = Get-Command cp -ErrorAction SilentlyContinue
-if ($cp) {
-    $cpSource = if ($cp.Source) { $cp.Source } else { "(built-in or aliased)" }
-    $noPreserveSupport = (& cp --help 2>&1) -match "no-preserve"
+# cp.exe is the ROOT CAUSE of the libsql-ffi os error 5 on Windows.
+# libsql-ffi build.rs calls Command::new("cp") to copy SQLite3MultipleCiphers.
+# PowerShell's "cp" alias (Copy-Item) is NOT visible to Rust subprocesses --
+# only real .exe files in PATH are found.  Without cp.exe:
+#   1. Command::new("cp") fails (os error 2 / not found)
+#   2. Fallback: fs::copy(SQLite3MultipleCiphers_dir, sqlite3mc_dir)
+#   3. CopyFileExW on a directory source -> ERROR_ACCESS_DENIED (os error 5)
+#   4. match arm `Err(e) if e.kind() == InvalidInput` does NOT match -> .unwrap() panics
+# dev-windows.ps1 adds Git's usr\bin\cp.exe to PATH to fix this.
+Write-Section "cp.exe (ROOT CAUSE of libsql-ffi os error 5)"
+
+# Look for a real cp.exe binary, not a PS alias.
+$realCpExe = $null
+$gitCpCandidates = @(
+    "$env:ProgramFiles\Git\usr\bin\cp.exe",
+    "${env:ProgramFiles(x86)}\Git\usr\bin\cp.exe",
+    "$env:LOCALAPPDATA\Programs\Git\usr\bin\cp.exe"
+)
+# First check PATH for cp.exe specifically (not alias)
+$cpInPath = $env:PATH.Split(";") | Where-Object { $_ -and (Test-Path (Join-Path $_ "cp.exe")) } | Select-Object -First 1
+if ($cpInPath) {
+    $realCpExe = Join-Path $cpInPath "cp.exe"
+} else {
+    # Not in PATH - check known Git locations
+    $gitCpCandidates | ForEach-Object {
+        if (-not $realCpExe -and (Test-Path $_)) { $realCpExe = $_ }
+    }
+}
+
+if ($realCpExe) {
+    $noPreserveSupport = (& $realCpExe --help 2>&1) -match "no-preserve"
     if ($noPreserveSupport) {
-        OK "cp supports --no-preserve: $cpSource"
-        INFO "libsql-ffi will use cp and NOT preserve read-only on copy (best case)"
+        if ($cpInPath) {
+            OK "cp.exe in PATH with --no-preserve support: $realCpExe"
+            INFO "libsql-ffi will use cp.exe and copy correctly  -  os error 5 will NOT occur"
+        } else {
+            WARN "cp.exe exists at $realCpExe but is NOT in PATH"
+            FAIL "libsql-ffi Command::new('cp') will fail  -  dev-windows.ps1 must add Git usr\bin to PATH"
+            INFO "  Fix: dev-windows.ps1 adds Git usr\bin automatically if Git for Windows is installed"
+        }
     } else {
-        INFO "cp found ($cpSource) but lacks --no-preserve  -  libsql-ffi falls back to fs::copy"
-        INFO "This is OK as long as libsql-ffi registry source has 0 read-only files (see check above)"
+        WARN "cp.exe found ($realCpExe) but lacks --no-preserve  -  may not copy directories correctly"
     }
 } else {
-    INFO "cp not in PATH  -  libsql-ffi uses fs::copy (OK if registry source has 0 read-only files)"
-    $gitCp = "C:\Program Files\Git\usr\bin\cp.exe"
-    if (Test-Path $gitCp) { INFO "  Git cp.exe available at $gitCp but not in PATH" }
+    FAIL "cp.exe not found anywhere (Git for Windows not installed?)"
+    FAIL "  This is the ROOT CAUSE of libsql-ffi os error 5 at build.rs:465"
+    INFO "  Install Git for Windows: https://git-scm.com/download/win"
+    INFO "  dev-windows.ps1 will then add Git usr\bin to PATH automatically"
+    # Extra check: warn if PowerShell 'cp' alias exists (common confusion)
+    $psAlias = Get-Command cp -ErrorAction SilentlyContinue
+    if ($psAlias -and -not $psAlias.Source) {
+        INFO "  NOTE: PowerShell has a 'cp' alias (Copy-Item) but Rust subprocesses cannot use it"
+    }
 }
 
 # ---------------------------------------------------------------------------
