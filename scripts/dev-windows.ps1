@@ -83,12 +83,19 @@ $env:ORT_STRATEGY = "download"
 # Corporate AppLocker/WDAC policies can block unsigned build-script executables
 # from certain paths (os error 4551). Probe candidate paths and use the first
 # one that allows execution. Set CHAR_TARGET_DIR to force a specific path.
+#
+# IMPORTANT: probe with a real .exe, not a .bat.  AppLocker EXE rules do NOT
+# apply to .bat files, so a .bat probe always passes even when compiled Rust
+# build-script .exe files are blocked.  We copy a known system binary to the
+# candidate directory; if AppLocker uses path-based rules the copy will be
+# blocked just like any other .exe placed there.
 function Test-ExecAllowed($dir) {
-    $probe = Join-Path $dir "_exec_probe.bat"
+    $probe = Join-Path $dir "_exec_probe.exe"
     try {
         $null = New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop
-        "@echo off" | Set-Content -LiteralPath $probe -Encoding ASCII
-        $null = & cmd /c $probe 2>&1
+        Copy-Item -LiteralPath "$env:windir\System32\where.exe" `
+            -Destination $probe -Force -ErrorAction Stop
+        $null = & $probe "where" 2>&1
         return $true
     } catch {
         return $false
