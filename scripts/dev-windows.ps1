@@ -86,8 +86,14 @@ $gitCpCandidates = @(
 )
 $gitUsrBin = $gitCpCandidates | Where-Object { Test-Path (Join-Path $_ "cp.exe") } | Select-Object -First 1
 if ($gitUsrBin) {
-    $env:PATH = "$gitUsrBin;$env:PATH"
-    Write-Host "  cp.exe: $gitUsrBin\cp.exe"
+    # IMPORTANT: do NOT add all of usr\bin to PATH — it contains link.exe (GNU
+    # linker) which would shadow MSVC's link.exe and break every crate that
+    # links against Windows SDK libs.  Copy only cp.exe to an isolated dir.
+    $gitCpIsolated = Join-Path $env:TEMP "char-git-cp"
+    $null = New-Item -ItemType Directory -Force -Path $gitCpIsolated
+    Copy-Item -LiteralPath (Join-Path $gitUsrBin "cp.exe") -Destination $gitCpIsolated -Force
+    $env:PATH = "$gitCpIsolated;$env:PATH"
+    Write-Host "  cp.exe: $gitCpIsolated\cp.exe (isolated from $gitUsrBin)"
 } else {
     Write-Host ""
     Write-Host "  ERROR: cp.exe not found (Git for Windows not installed?)." -ForegroundColor Red
