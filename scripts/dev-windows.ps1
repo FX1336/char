@@ -26,18 +26,18 @@ $env:PATH = "$MINGW_DIR\bin;$LOCAL_BIN;$env:USERPROFILE\.cargo\bin;$env:PATH"
 # MinGW g++ compiles with libstdc++ (std:: namespace); whisper-rs-sys hard-codes
 # cargo:rustc-link-lib=dylib=stdc++ so the toolchain is consistent end-to-end.
 # llvm-mingw clang++ uses LLVM libc++ (std::__1:: namespace) which is incompatible
-# with MinGW's libstdc++ at link time — hence we avoid clang++ for C++ compilation.
+# with MinGW's libstdc++ at link time - hence we avoid clang++ for C++ compilation.
 $env:LIBCLANG_PATH = "$LLVM_DIR\bin"   # libclang.dll lives here (for bindgen)
 $env:CC  = "$MINGW_DIR\bin\x86_64-w64-mingw32-gcc.exe"
 $env:CXX = "$MINGW_DIR\bin\x86_64-w64-mingw32-g++.exe"
 # cmake toolchain file: cmake-rs reads CMAKE_TOOLCHAIN_FILE and passes it as
 # -DCMAKE_TOOLCHAIN_FILE to every cmake invocation (whisper-rs-sys, libsql-ffi, etc.).
 # The file (apps/desktop/src-tauri/cmake/windows-gnu.cmake):
-#   1. Sets CMAKE_C/CXX_COMPILER from env — cmake-rs intentionally skips this on
+#   1. Sets CMAKE_C/CXX_COMPILER from env - cmake-rs intentionally skips this on
 #      non-MSVC Windows, so cmake would otherwise auto-detect gcc.exe from PATH.
-#   2. Strips /utf-8 from cmake flags — whisper-rs-sys adds it unconditionally on
+#   2. Strips /utf-8 from cmake flags - whisper-rs-sys adds it unconditionally on
 #      Windows but GCC treats it as a filename, not a flag.
-#   3. Strips --target=... from cmake flags — whisper-rs-sys injects this
+#   3. Strips --target=... from cmake flags - whisper-rs-sys injects this
 #      clang-specific flag unconditionally; GCC does not accept it.
 $env:CMAKE_C_COMPILER   = "$MINGW_DIR\bin\x86_64-w64-mingw32-gcc.exe"
 $env:CMAKE_CXX_COMPILER = "$MINGW_DIR\bin\x86_64-w64-mingw32-g++.exe"
@@ -133,7 +133,7 @@ if ($env:CHAR_TARGET_DIR) {
                 Select-String -Pattern 'FilePathRule|FilePath Path=' |
                 ForEach-Object { Write-Host "    $_" }
         } catch {
-            Write-Host "    (could not read AppLocker policy — may be WDAC)" -ForegroundColor DarkGray
+            Write-Host "    (could not read AppLocker policy - may be WDAC)" -ForegroundColor DarkGray
         }
         exit 1
     }
@@ -326,7 +326,7 @@ function Test-Command {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
-# ── Preflight checks ──────────────────────────────────────────────────────────
+# -- Preflight checks ----------------------------------------------------------
 Write-Step "Preflight checks"
 
 if (-not (Test-Command "cargo")) {
@@ -370,7 +370,7 @@ if (-not (Test-Path (Join-Path $REPO_ROOT "node_modules"))) {
 }
 Write-Host "    deps    node_modules present"
 
-# ── Start dev server ─────────────────────────────────────────────────────────
+# -- Start dev server ---------------------------------------------------------
 Write-Step "Starting Char (dev mode)"
 Write-Host "    Frontend:  http://localhost:1422"
 Write-Host "    Backend:   x86_64-pc-windows-gnu"
