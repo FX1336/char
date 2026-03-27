@@ -132,6 +132,18 @@ if ($env:CHAR_TARGET_DIR) {
     }
 }
 
+# -- Windows Defender exclusions (best-effort) ---------------------------------
+# AV real-time scanning locks .cargo/registry/src files mid-copy and causes
+# os error 5 in build scripts.  Add exclusions if running as admin; skip if
+# not (setup-windows.ps1 handles the authoritative add as admin).
+$isAdminDev = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($isAdminDev -and $env:CARGO_TARGET_DIR) {
+    foreach ($p in @("$env:USERPROFILE\.cargo", $env:CARGO_TARGET_DIR)) {
+        try { Add-MpPreference -ExclusionPath $p -ErrorAction Stop } catch {}
+    }
+}
+
 # -- Fix libsql-ffi Windows read-only issue ------------------------------------
 # libsql-ffi build.rs copies its bundled source to OUT_DIR/sqlite3mc using
 # `cp -R --no-preserve=mode,ownership` (Unix).  On Windows, cp is absent so

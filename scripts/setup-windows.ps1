@@ -51,6 +51,27 @@ if (-not $isAdmin) {
     exit 1
 }
 
+# -- Windows Defender exclusions -----------------------------------------------
+# Real-time AV scanning of .cargo/registry/src locks files mid-copy inside
+# build scripts, causing os error 5 (Zugriff verweigert) in libsql-ffi and
+# other crates that copy source files to OUT_DIR.  Adding exclusions here
+# (setup runs as admin, so Add-MpPreference succeeds) prevents this.
+Write-Step "Windows Defender exclusions"
+$defenderPaths = @(
+    "$env:USERPROFILE\.cargo",
+    "$env:LOCALAPPDATA\char-build",
+    "$env:TEMP\char-build"
+)
+foreach ($p in $defenderPaths) {
+    try {
+        Add-MpPreference -ExclusionPath $p -ErrorAction Stop
+        Write-Ok "Excluded from Defender: $p"
+    } catch {
+        Write-Host "    WARN: Could not add Defender exclusion for $p : $_" -ForegroundColor Yellow
+        Write-Host "    (May be managed by group policy  -  ask IT to exclude build paths)" -ForegroundColor Yellow
+    }
+}
+
 # -- WebView2 ------------------------------------------------------------------
 Write-Step "WebView2 Runtime"
 $wv2 = Get-ItemProperty `

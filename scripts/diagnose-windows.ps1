@@ -243,26 +243,107 @@ foreach ($c in $candidates) {
     $libsqlDirs = Get-ChildItem $buildBase -Filter "libsql-ffi-*" -Directory -ErrorAction SilentlyContinue
     if (-not $libsqlDirs) { OK "  No libsql-ffi build dirs (clean state)"; continue }
     foreach ($d in $libsqlDirs) {
-        $mc = Join-Path $d.FullName "out\sqlite3mc"
+        $outDir = Join-Path $d.FullName "out"
+        $mc     = Join-Path $outDir "sqlite3mc"
+
+        # --- sqlite3mc staging dir check ---
         if (Test-Path $mc) {
             $mcRO = @(Get-ChildItem $mc -Recurse -File -ErrorAction SilentlyContinue | Where-Object IsReadOnly)
             if ($mcRO.Count -gt 0) {
                 FAIL "  sqlite3mc EXISTS with $($mcRO.Count) read-only files at: $mc"
-                INFO "  This causes os error 5  -  dev-windows.ps1 must delete this dir before build"
             } else {
                 OK "  sqlite3mc exists, all files writable: $mc"
             }
         } else {
-            OK "  libsql-ffi build dir present, no stale sqlite3mc: $($d.Name)"
+            OK "  No stale sqlite3mc: $($d.Name)"
         }
+
+        # --- out dir write test ---
+        # The build script calls fs::create_dir_all("{out_dir}/sqlite3mc").
+        # If the out\ directory itself is not writable this fails with os error 5
+        # even when all source files are readable and no stale staging dir exists.
+        if (Test-Path $outDir) {
+            $wt = Join-Path $outDir "_diag_write.tmp"
+            try {
+                [System.IO.File]::WriteAllText($wt, "diag")
+                Remove-Item $wt -Force -ErrorAction SilentlyContinue
+                OK "  out dir writable: $outDir"
+            } catch {
+                FAIL "  out dir NOT writable: $outDir"
+                FAIL "  EXACT CAUSE of os error 5: Cargo cannot create sqlite3mc here"
+                try {
+                    $acl = Get-Acl $outDir
+                    INFO "  ACL owner: $($acl.Owner)"
+                    $acl.Access | ForEach-Object { INFO "    $($_.IdentityReference) $($_.AccessControlType) $($_.FileSystemRights)" }
+                } catch {}
+            }
+        }
+
+        # --- direct copy test (replicates fs::copy from registry to out dir) ---
+        # This catches AV locking, ACL issues, and any other reason the exact
+        # operation performed by the build script (copy a registry source file
+        # into out/) would fail.
+        if ($libsqlFfiSrc -and (Test-Path $outDir)) {
+            $srcFile = Get-ChildItem $libsqlFfiSrc.FullName -File -Recurse -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            if ($srcFile) {
+                $dstFile = Join-Path $outDir "_diag_copy.tmp"
+                try {
+                    [System.IO.File]::Copy($srcFile.FullName, $dstFile, $true)
+                    Remove-Item $dstFile -Force -ErrorAction SilentlyContinue
+                    OK "  Copy from registry to out dir: OK (reproduces what build script does)"
+                } catch {
+                    FAIL "  Copy from registry to out dir FAILED: $_"
+                    FAIL "  THIS IS THE EXACT FAILURE the build script hits at build.rs:465"
+                    INFO "  Likely cause: antivirus locking source file or ACL on dest dir"
+                }
+            }
+        }
+
         # Check for successful build artifact
-        $lib = Get-ChildItem (Join-Path $d.FullName "out") -Filter "*.lib" -Recurse -ErrorAction SilentlyContinue |
+        $lib = Get-ChildItem $outDir -Filter "*.lib" -Recurse -ErrorAction SilentlyContinue |
             Select-Object -First 1
-        if ($lib) { OK "  Build artifact cached: $($lib.Name)" }
+        if ($lib) { OK "  Built artifact cached: $($lib.Name)" }
     }
 }
 if ($firstAllowed) { INFO "`ndev-windows.ps1 will use: $firstAllowed" }
 else               { FAIL "No candidate path allows exe execution  -  all paths blocked by AppLocker/WDAC" }
+
+# ---------------------------------------------------------------------------
+Write-Section "Antivirus / Windows Defender exclusions"
+INFO "Paths that must be excluded from real-time AV scanning for builds to work:"
+INFO "  $env:USERPROFILE\.cargo"
+INFO "  $env:LOCALAPPDATA\char-build  (or active CARGO_TARGET_DIR)"
+try {
+    $mpPref = Get-MpPreference -ErrorAction Stop
+    $excl   = @($mpPref.ExclusionPath)
+    $cargoExcluded     = $excl | Where-Object { $_ -and $env:USERPROFILE -and $_.TrimEnd('\') -eq "$env:USERPROFILE\.cargo".TrimEnd('\') }
+    $buildExcluded     = $excl | Where-Object { $_ -and $env:LOCALAPPDATA -and $_.TrimEnd('\') -eq "$env:LOCALAPPDATA\char-build".TrimEnd('\') }
+    $cargoParentExcl   = $excl | Where-Object { $_ -and $env:USERPROFILE -and "$env:USERPROFILE\.cargo".StartsWith($_.TrimEnd('\')) }
+    $buildParentExcl   = $excl | Where-Object { $_ -and $env:LOCALAPPDATA -and "$env:LOCALAPPDATA\char-build".StartsWith($_.TrimEnd('\')) }
+
+    if ($cargoExcluded -or $cargoParentExcl) { OK ".cargo is excluded from Defender" }
+    else {
+        FAIL ".cargo NOT excluded from Defender real-time scan"
+        INFO "  Fix: Add-MpPreference -ExclusionPath `"$env:USERPROFILE\.cargo`"  (run as admin)"
+        INFO "  Or: setup-windows.ps1 adds this automatically"
+    }
+    if ($buildExcluded -or $buildParentExcl) { OK "char-build is excluded from Defender" }
+    else {
+        FAIL "char-build NOT excluded from Defender real-time scan"
+        INFO "  Fix: Add-MpPreference -ExclusionPath `"$env:LOCALAPPDATA\char-build`"  (run as admin)"
+        INFO "  Or: setup-windows.ps1 adds this automatically"
+    }
+    if ($excl.Count -gt 0) {
+        INFO "Current exclusions ($($excl.Count)):"
+        $excl | ForEach-Object { INFO "  $_" }
+    }
+} catch {
+    WARN "Could not read Defender preferences (managed policy or non-Defender AV?): $_"
+    INFO "If using corporate AV (CrowdStrike, Sophos, etc.) ensure these paths are excluded:"
+    INFO "  $env:USERPROFILE\.cargo"
+    INFO "  $env:LOCALAPPDATA\char-build"
+}
 
 # ---------------------------------------------------------------------------
 Write-Section "ORT (ONNX Runtime) cache"
