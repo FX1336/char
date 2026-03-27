@@ -137,8 +137,8 @@ if ($env:CHAR_TARGET_DIR) {
 # --no-preserve=mode,ownership` on Unix.  On Windows that falls back to
 # Rust's fs::copy, which *preserves* read-only attributes from the Cargo
 # registry.  A second write to the already-copied (read-only) sqlite3.c
-# then fails with "Zugriff verweigert" (os error 5).  Unlocking here lets
-# fs::copy produce writable files so the build can proceed.
+# then fails with "Zugriff verweigert" (os error 5).  Unlocking both the
+# registry source and any stale OUT_DIR lets all copies succeed.
 $libsqlFfiSrc = Get-ChildItem `
     "$env:USERPROFILE\.cargo\registry\src\*\libsql-ffi-*" `
     -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -147,6 +147,16 @@ if ($libsqlFfiSrc) {
         Where-Object IsReadOnly |
         ForEach-Object { $_.IsReadOnly = $false }
     Write-Host "  Unlocked libsql-ffi registry source: $($libsqlFfiSrc.Name)"
+}
+# Also unlock any read-only files left in the build output from a prior run.
+if ($env:CARGO_TARGET_DIR) {
+    Get-ChildItem "$env:CARGO_TARGET_DIR\debug\build\libsql-ffi-*" `
+        -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Get-ChildItem -Recurse -LiteralPath $_.FullName -File |
+                Where-Object IsReadOnly |
+                ForEach-Object { $_.IsReadOnly = $false }
+        }
 }
 
 # -- Activate fnm Node version -------------------------------------------------
