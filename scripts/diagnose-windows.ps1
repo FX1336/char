@@ -258,56 +258,62 @@ foreach ($c in $candidates) {
             OK "  No stale sqlite3mc: $($d.Name)"
         }
 
-        # --- out dir write test ---
-        # The build script calls fs::create_dir_all("{out_dir}/sqlite3mc").
-        # If the out\ directory itself is not writable this fails with os error 5
-        # even when all source files are readable and no stale staging dir exists.
+        # Check for successful build artifact (out dir may not exist after a failed build;
+        # Cargo removes it on failure to force a clean retry next time)
         if (Test-Path $outDir) {
-            $wt = Join-Path $outDir "_diag_write.tmp"
-            try {
-                [System.IO.File]::WriteAllText($wt, "diag")
-                Remove-Item $wt -Force -ErrorAction SilentlyContinue
-                OK "  out dir writable: $outDir"
-            } catch {
-                FAIL "  out dir NOT writable: $outDir"
-                FAIL "  EXACT CAUSE of os error 5: Cargo cannot create sqlite3mc here"
-                try {
-                    $acl = Get-Acl $outDir
-                    INFO "  ACL owner: $($acl.Owner)"
-                    $acl.Access | ForEach-Object { INFO "    $($_.IdentityReference) $($_.AccessControlType) $($_.FileSystemRights)" }
-                } catch {}
-            }
-        }
-
-        # --- direct copy test (replicates fs::copy from registry to out dir) ---
-        # This catches AV locking, ACL issues, and any other reason the exact
-        # operation performed by the build script (copy a registry source file
-        # into out/) would fail.
-        if ($libsqlFfiSrc -and (Test-Path $outDir)) {
-            $srcFile = Get-ChildItem $libsqlFfiSrc.FullName -File -Recurse -ErrorAction SilentlyContinue |
+            $lib = Get-ChildItem $outDir -Filter "*.lib" -Recurse -ErrorAction SilentlyContinue |
                 Select-Object -First 1
-            if ($srcFile) {
-                $dstFile = Join-Path $outDir "_diag_copy.tmp"
-                try {
-                    [System.IO.File]::Copy($srcFile.FullName, $dstFile, $true)
-                    Remove-Item $dstFile -Force -ErrorAction SilentlyContinue
-                    OK "  Copy from registry to out dir: OK (reproduces what build script does)"
-                } catch {
-                    FAIL "  Copy from registry to out dir FAILED: $_"
-                    FAIL "  THIS IS THE EXACT FAILURE the build script hits at build.rs:465"
-                    INFO "  Likely cause: antivirus locking source file or ACL on dest dir"
-                }
-            }
+            if ($lib) { OK "  Built artifact cached: $($lib.Name)" }
+            else       { INFO "  out dir exists but no .lib yet" }
+        } else {
+            INFO "  out dir absent (Cargo deleted it after last failed build  -  normal)"
         }
-
-        # Check for successful build artifact
-        $lib = Get-ChildItem $outDir -Filter "*.lib" -Recurse -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-        if ($lib) { OK "  Built artifact cached: $($lib.Name)" }
     }
 }
 if ($firstAllowed) { INFO "`ndev-windows.ps1 will use: $firstAllowed" }
 else               { FAIL "No candidate path allows exe execution  -  all paths blocked by AppLocker/WDAC" }
+
+# ---------------------------------------------------------------------------
+# Standalone copy test: reproduces exactly what libsql-ffi build.rs does at
+# line 465 (copy a file from .cargo/registry/src into a writable target dir).
+# Uses a fresh temp dir so it works even when Cargo has cleaned up the out dir.
+# Catches AV locking, ACL blocks, and any other permission failure at runtime.
+Write-Section "libsql-ffi copy simulation (reproduces build.rs:465)"
+if ($libsqlFfiSrc) {
+    $simDst = Join-Path $env:TEMP "char-diag-copy-test"
+    try { Remove-Item $simDst -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+    $null = New-Item -ItemType Directory -Force -Path $simDst
+    $failed = $false
+    $srcMC = Join-Path $libsqlFfiSrc.FullName "bundled\SQLite3MultipleCiphers"
+    if (Test-Path $srcMC) {
+        $files = @(Get-ChildItem $srcMC -Recurse -File -ErrorAction SilentlyContinue)
+        INFO "Copying $($files.Count) files from SQLite3MultipleCiphers to temp dir..."
+        foreach ($f in $files) {
+            $rel = $f.FullName.Substring($srcMC.Length).TrimStart('\')
+            $dst = Join-Path $simDst $rel
+            $dstDir = Split-Path $dst -Parent
+            try {
+                if (-not (Test-Path $dstDir)) { $null = New-Item -ItemType Directory -Force -Path $dstDir }
+                [System.IO.File]::Copy($f.FullName, $dst, $true)
+            } catch {
+                FAIL "Copy FAILED: $($f.FullName)"
+                FAIL "  Error: $_"
+                FAIL "  THIS IS THE EXACT FAILURE at build.rs:465  -  likely AV or ACL issue"
+                $failed = $true
+                break
+            }
+        }
+        if (-not $failed) {
+            OK "All $($files.Count) files copied successfully  -  copy simulation passed"
+            INFO "  This rules out AV locking and ACL issues as root cause"
+        }
+    } else {
+        WARN "bundled\SQLite3MultipleCiphers not found in registry  -  skipping copy test"
+    }
+    try { Remove-Item $simDst -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+} else {
+    WARN "libsql-ffi registry source not found  -  skipping copy test"
+}
 
 # ---------------------------------------------------------------------------
 Write-Section "Antivirus / Windows Defender exclusions"
