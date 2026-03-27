@@ -75,6 +75,12 @@ $env:ORT_LIB_LOCATION = $ORT_DIR
 $env:ORT_PREFER_DYNAMIC_LINK = "1"
 $env:PATH = "$ORT_DIR\lib;$env:PATH"
 
+# CARGO_TARGET_DIR: move the build output out of the project tree into the user
+# profile.  Corporate AppLocker/WDAC policies often block execution of compiled
+# binaries (build scripts, proc-macros) that live inside project/network paths
+# but allow binaries under %USERPROFILE%.  This fixes os error 4551.
+$env:CARGO_TARGET_DIR = "$env:USERPROFILE\.cargo\target\char-desktop"
+
 # cmake verbose makefile: causes make to print every compiler invocation.
 # When a cmake build FAILS, cargo captures and displays the full build script
 # output including these lines, making it easier to diagnose compile errors.
