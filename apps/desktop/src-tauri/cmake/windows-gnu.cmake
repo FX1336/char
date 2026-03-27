@@ -31,20 +31,20 @@ if(DEFINED ENV{CMAKE_CXX_COMPILER})
     set(CMAKE_CXX_COMPILER "${_tc_cxx}" CACHE FILEPATH "" FORCE)
 endif()
 
-# ── Flatten static-library output into CMAKE_INSTALL_PREFIX (= OUT_DIR) ───────
-# cmake-rs (the cmake crate) sets CMAKE_INSTALL_PREFIX to the build script's
-# OUT_DIR and then searches OUT_DIR itself with
-#   cargo:rustc-link-search=native=OUT_DIR
-# By default, cmake places static libraries deep inside subdirectories of the
-# build tree (e.g. OUT_DIR/build/ggml/src/libggml.a).  The whisper-rs-sys
-# build.rs does recurse those subdirs with add_link_search_path(), but on
-# Windows the resulting backslash paths can be mis-handled by the GNU linker.
-# Setting CMAKE_ARCHIVE_OUTPUT_DIRECTORY to OUT_DIR puts every .a file
-# directly in the directory that cargo always passes as -L to the linker,
-# so libggml.a / libggml-base.a / libggml-cpu.a / libwhisper.a are always
-# found regardless of build-tree depth.
+# ── Flatten static-library output into OUT_DIR/build ─────────────────────────
+# cmake-rs sets CMAKE_INSTALL_PREFIX = OUT_DIR and creates the build tree at
+# OUT_DIR/build/.  Different Rust build scripts use different search paths:
+#
+#   whisper-rs-sys: searches OUT_DIR/build/ recursively via add_link_search_path()
+#                   AND searches OUT_DIR directly.
+#   libsql-ffi:     searches OUT_DIR/build/, OUT_DIR/build/Release/, OUT_DIR/build/Debug/
+#
+# Default cmake behaviour places .a files deep in the build tree
+# (e.g. OUT_DIR/build/ggml/src/libggml.a) which both build scripts can
+# handle, but backslash paths deep in the tree can confuse GNU ld on Windows.
+# Flattening to OUT_DIR/build/ satisfies all search paths and avoids deep paths.
 if(DEFINED CMAKE_INSTALL_PREFIX)
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_INSTALL_PREFIX}"
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_INSTALL_PREFIX}/build"
         CACHE PATH "" FORCE)
 endif()
 
