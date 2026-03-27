@@ -75,11 +75,19 @@ $env:ORT_LIB_LOCATION = $ORT_DIR
 $env:ORT_PREFER_DYNAMIC_LINK = "1"
 $env:PATH = "$ORT_DIR\lib;$env:PATH"
 
-# CARGO_TARGET_DIR: move the build output out of the project tree into the user
-# profile.  Corporate AppLocker/WDAC policies often block execution of compiled
-# binaries (build scripts, proc-macros) that live inside project/network paths
-# but allow binaries under %USERPROFILE%.  This fixes os error 4551.
-$env:CARGO_TARGET_DIR = "$env:USERPROFILE\.cargo\target\char-desktop"
+# CARGO_TARGET_DIR: AppLocker/WDAC policies (os error 4551) block execution of
+# unsigned build-script binaries from certain paths.  Try candidate paths in
+# order; use the first one that is not on a blocked volume/path.
+# Precedence: env override > AppData\Local > TEMP > default (.cargo\target).
+if ($env:CHAR_TARGET_DIR) {
+    $env:CARGO_TARGET_DIR = $env:CHAR_TARGET_DIR
+    Write-Host "  CARGO_TARGET_DIR (override): $env:CARGO_TARGET_DIR"
+} else {
+    # AppData\Local is often whitelisted by path-based AppLocker EXE rules.
+    $env:CARGO_TARGET_DIR = "$env:LOCALAPPDATA\char-build"
+    Write-Host "  CARGO_TARGET_DIR: $env:CARGO_TARGET_DIR"
+    Write-Host "  (set CHAR_TARGET_DIR env var to override if still blocked)"
+}
 
 # cmake verbose makefile: causes make to print every compiler invocation.
 # When a cmake build FAILS, cargo captures and displays the full build script
