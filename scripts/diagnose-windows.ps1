@@ -270,32 +270,54 @@ $ortCache = "$env:USERPROFILE\.cache\ort"
 if (Test-Path $ortCache) {
     $ortLibs = @(Get-ChildItem $ortCache -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue)
     if ($ortLibs.Count -gt 0) { OK "ORT already cached ($($ortLibs.Count) DLL(s) in $ortCache)" }
-    else { WARN "ORT cache dir exists but no DLLs  -  will download on first build (requires internet)" }
+    else { INFO "ORT cache dir exists but no DLLs  -  will auto-download on first build (ORT_STRATEGY=download)" }
 } else {
-    WARN "ORT not yet cached at $ortCache  -  will download on first build (~150 MB, requires internet)"
+    INFO "ORT not yet cached  -  will auto-download on first build (~150 MB). Needs internet access."
 }
 
 # ---------------------------------------------------------------------------
-Write-Section "cp.exe (affects libsql-ffi copy_with_cp)"
+Write-Section "cp.exe (libsql-ffi copy_with_cp behavior)"
 $cp = Get-Command cp -ErrorAction SilentlyContinue
 if ($cp) {
-    OK "cp found: $($cp.Source)"
+    $cpSource = if ($cp.Source) { $cp.Source } else { "(built-in or aliased)" }
     $noPreserveSupport = (& cp --help 2>&1) -match "no-preserve"
-    if ($noPreserveSupport) { OK "cp supports --no-preserve (libsql-ffi will NOT preserve read-only on copy)" }
-    else { WARN "cp found but does not support --no-preserve  -  libsql-ffi falls back to fs::copy" }
+    if ($noPreserveSupport) {
+        OK "cp supports --no-preserve: $cpSource"
+        INFO "libsql-ffi will use cp and NOT preserve read-only on copy (best case)"
+    } else {
+        INFO "cp found ($cpSource) but lacks --no-preserve  -  libsql-ffi falls back to fs::copy"
+        INFO "This is OK as long as libsql-ffi registry source has 0 read-only files (see check above)"
+    }
 } else {
-    WARN "cp not in PATH  -  libsql-ffi uses fs::copy fallback (preserves read-only from registry)"
+    INFO "cp not in PATH  -  libsql-ffi uses fs::copy (OK if registry source has 0 read-only files)"
     $gitCp = "C:\Program Files\Git\usr\bin\cp.exe"
-    if (Test-Path $gitCp) { INFO "  Git cp available at: $gitCp (not in PATH  -  adding it would fix this permanently)" }
+    if (Test-Path $gitCp) { INFO "  Git cp.exe available at $gitCp but not in PATH" }
 }
 
 # ---------------------------------------------------------------------------
-Write-Section "PATH summary (after vcvars64 would be loaded)"
-$pathDirs = $env:PATH -split ";" | Where-Object { $_ -ne "" }
+# Load vcvars64 to check MSVC tools in context, just like dev-windows.ps1 does.
+Write-Section "PATH after vcvars64 (MSVC tools)"
+$vcvarsLoaded = $false
+if ($vsPath) {
+    $vcvars2 = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+    if (Test-Path $vcvars2) {
+        $envDump2 = cmd /c "`"$vcvars2`" >nul 2>&1 && set" 2>&1
+        foreach ($line in $envDump2) {
+            if ($line -match "^([^=]+)=(.*)$") {
+                $k = $Matches[1]; $v = $Matches[2]
+                [System.Environment]::SetEnvironmentVariable($k, $v)
+                if ($k -eq "PATH") { $env:PATH = $v }
+            }
+        }
+        $vcvarsLoaded = $true
+        OK "vcvars64 loaded for PATH check"
+    }
+}
 foreach ($tool in @("cargo", "cl", "cmake", "ninja", "link", "rc")) {
-    $found = $pathDirs | ForEach-Object { Join-Path $_ "$tool.exe" } | Where-Object { Test-Path $_ } | Select-Object -First 1
-    if ($found) { OK "$tool : $found" }
-    else        { WARN "$tool.exe not found in current PATH (may be available after vcvars64 loads)" }
+    $found = Get-Command "$tool.exe" -ErrorAction SilentlyContinue
+    if ($found) { OK "$tool : $($found.Source)" }
+    elseif ($vcvarsLoaded) { FAIL "$tool.exe not found even after vcvars64  -  VS installation may be incomplete" }
+    else { WARN "$tool.exe not found (vcvars64 could not be loaded  -  check VS Build Tools section above)" }
 }
 
 # ---------------------------------------------------------------------------
