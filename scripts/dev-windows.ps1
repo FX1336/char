@@ -137,28 +137,40 @@ if ($env:CHAR_TARGET_DIR) {
 # `cp -R --no-preserve=mode,ownership` (Unix).  On Windows, cp is absent so
 # it falls back to Rust's fs::copy, which PRESERVES the read-only attribute
 # that Cargo sets on registry sources.  Any subsequent write to the already-
-# copied (read-only) sqlite3.c fails with os error 5 (Zugriff verweigert).
+# copied (read-only) file fails with os error 5 (Zugriff verweigert).
 #
-# Fix:
-#  1. Use `attrib -R /S /D` to strip read-only from the registry source so
-#     fresh copies land as writable.  (PowerShell .IsReadOnly = $false is
-#     unreliable on NTFS; attrib directly calls SetFileAttributes.)
-#  2. Delete any stale sqlite3mc staging dir from a prior failed build run
-#     so the build script always starts with a clean destination.
-$libsqlFfiSrc = Get-ChildItem `
-    "$env:USERPROFILE\.cargo\registry\src\*\libsql-ffi-*" `
-    -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($libsqlFfiSrc) {
-    $null = cmd /c "attrib -R `"$($libsqlFfiSrc.FullName)\*`" /S /D 2>&1"
-    Write-Host "  Unlocked libsql-ffi registry source: $($libsqlFfiSrc.Name)"
+# Fix 1: attrib.exe -R strips read-only from the registry source so fresh
+#         copies land as writable.
+# Fix 2: Delete the stale sqlite3mc staging dir so the build script always
+#         writes into a clean, non-read-only destination.
+#
+# NOTE: PS5.1 does NOT expand wildcards in the middle of a path, so
+#       Get-ChildItem "dir\glob-*\sub\dir" silently returns nothing.
+#       We enumerate in two steps to avoid this.
+
+$regSrcRoot = Join-Path $env:USERPROFILE ".cargo\registry\src"
+if (Test-Path $regSrcRoot) {
+    $libsqlFfiSrc = Get-ChildItem $regSrcRoot -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object { Get-ChildItem $_.FullName -Filter "libsql-ffi-*" -Directory -ErrorAction SilentlyContinue } |
+        Select-Object -First 1
+    if ($libsqlFfiSrc) {
+        & attrib -R "$($libsqlFfiSrc.FullName)" /S /D
+        Write-Host "  Stripped read-only from libsql-ffi registry source: $($libsqlFfiSrc.Name)"
+    }
 }
+
 if ($env:CARGO_TARGET_DIR) {
-    Get-ChildItem "$env:CARGO_TARGET_DIR\debug\build\libsql-ffi-*\out\sqlite3mc" `
-        -Directory -ErrorAction SilentlyContinue |
-        ForEach-Object {
-            Remove-Item -Recurse -Force -LiteralPath $_.FullName -ErrorAction SilentlyContinue
-            Write-Host "  Removed stale sqlite3mc staging dir from prior run"
-        }
+    $buildBase = Join-Path $env:CARGO_TARGET_DIR "debug\build"
+    if (Test-Path $buildBase) {
+        Get-ChildItem $buildBase -Filter "libsql-ffi-*" -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $mc = Join-Path $_.FullName "out\sqlite3mc"
+                if (Test-Path $mc) {
+                    Remove-Item -Recurse -Force -LiteralPath $mc
+                    Write-Host "  Removed stale sqlite3mc: $mc"
+                }
+            }
+    }
 }
 
 # -- Activate fnm Node version -------------------------------------------------
