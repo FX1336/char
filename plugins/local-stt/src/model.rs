@@ -1,6 +1,6 @@
 pub use hypr_local_model::{AmModel, CactusSttModel, LocalModel, WhisperModel};
 
-pub static SUPPORTED_MODELS: [LocalModel; 7] = [
+pub static SUPPORTED_MODELS: [LocalModel; 11] = [
     LocalModel::Am(AmModel::ParakeetV2),
     LocalModel::Am(AmModel::ParakeetV3),
     LocalModel::Am(AmModel::WhisperLargeV3),
@@ -8,6 +8,12 @@ pub static SUPPORTED_MODELS: [LocalModel; 7] = [
     LocalModel::Cactus(CactusSttModel::WhisperSmallInt8Apple),
     LocalModel::Cactus(CactusSttModel::ParakeetTdt0_6bV3Int4),
     LocalModel::Cactus(CactusSttModel::ParakeetTdt0_6bV3Int8),
+    // Whisper-cpp models: available on x86_64 (Windows, Linux) and Apple Silicon.
+    // The whisper-cpp feature must be enabled in the binary (see Cargo.toml targets).
+    LocalModel::Whisper(WhisperModel::QuantizedTiny),
+    LocalModel::Whisper(WhisperModel::QuantizedSmall),
+    LocalModel::Whisper(WhisperModel::QuantizedSmallEn),
+    LocalModel::Whisper(WhisperModel::QuantizedLargeTurbo),
 ];
 
 #[derive(serde::Serialize, serde::Deserialize, specta::Type)]

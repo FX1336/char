@@ -182,13 +182,6 @@ function HyprProviderCard({
                 <div className="flex-1 border-t border-dashed border-neutral-300" />
               </div>
 
-              {isWindows && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                  On-device transcription is not yet supported on Windows. Use
-                  Char Cloud or a third-party provider instead.
-                </div>
-              )}
-
               {argmaxModels.length > 0 && (
                 <>
                   <ModelGroupLabel label="Argmax" />
@@ -205,7 +198,7 @@ function HyprProviderCard({
 
               {whispercppModels.length > 0 && (
                 <>
-                  <ModelGroupLabel label="WhisperCPP" unsupported={isWindows} />
+                  <ModelGroupLabel label="WhisperCPP" />
                   {whispercppModels.map((model) => (
                     <HyprProviderLocalRow
                       key={model.key as string}
