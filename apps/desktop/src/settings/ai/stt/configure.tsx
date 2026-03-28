@@ -646,23 +646,20 @@ function ProviderContext({ providerId }: { providerId: ProviderId }) {
 }
 
 function useSafeSelectModel() {
-  const handleSelectModel = settings.UI.useSetValueCallback(
-    "current_stt_model",
-    (model: LocalModel) => model,
-    [],
-    settings.STORE_ID,
-  );
-
+  const store = settings.UI.useStore(settings.STORE_ID);
   const active = useListener((state) => state.live.status !== "inactive");
 
   const handler = useCallback(
     (model: LocalModel) => {
-      if (active) {
+      if (active || !store) {
         return;
       }
-      handleSelectModel(model);
+      // Always set provider to "hyprnote" so the STT connection check
+      // (current_stt_provider === "hyprnote") passes for local models.
+      store.setValue("current_stt_provider", "hyprnote");
+      store.setValue("current_stt_model", model as string);
     },
-    [active, handleSelectModel],
+    [active, store],
   );
 
   return handler;
