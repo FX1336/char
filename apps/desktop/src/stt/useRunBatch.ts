@@ -47,6 +47,10 @@ function getBatchProvider(
   if (provider === "hyprnote") {
     if (model.startsWith("am-")) return "am";
     if (model.startsWith("cactus-")) return "cactus";
+    // Whisper models (QuantizedTiny, QuantizedSmall, etc.) use the local WebSocket
+    // server — same protocol as the Am sidecar. Route them through BatchProvider::Am
+    // so run_batch_streaming is used instead of run_batch_simple (HTTP POST).
+    if (model.startsWith("Quantized")) return "am";
     return "hyprnote";
   }
   return BATCH_PROVIDER_MAP[provider] ?? null;
