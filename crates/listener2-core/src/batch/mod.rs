@@ -32,6 +32,7 @@ pub enum BatchProvider {
     Hyprnote,
     Am,
     Cactus,
+    RealtimeSTT,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -170,6 +171,7 @@ async fn run_batch_inner(
         .into()),
         BatchProvider::Mistral => run_batch_simple::<MistralAdapter>(params, listen_params).await,
         BatchProvider::Hyprnote => run_batch_simple::<HyprnoteAdapter>(params, listen_params).await,
+        BatchProvider::RealtimeSTT => run_batch_streaming(runtime, params, listen_params).await,
     }
 }
 

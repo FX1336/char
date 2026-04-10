@@ -202,6 +202,16 @@ const _PROVIDERS = [
   },
   {
     disabled: false,
+    id: "realtimestt",
+    displayName: "RealtimeSTT",
+    badge: "Beta",
+    icon: <Icon icon="mingcute:mic-fill" className="size-4" />,
+    baseUrl: "http://localhost:8012",
+    models: ["default"],
+    requirements: [{ kind: "requires_config", fields: ["base_url"] }],
+  },
+  {
+    disabled: false,
     id: "custom",
     displayName: "Custom",
     badge: null,

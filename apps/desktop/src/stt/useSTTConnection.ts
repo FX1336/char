@@ -108,7 +108,12 @@ export const useSTTConnection = () => {
       };
     }
 
-    if (!baseUrl || !apiKey) {
+    if (!baseUrl) {
+      return null;
+    }
+
+    // RealtimeSTT is a local server with no authentication requirement
+    if (current_stt_provider !== "realtimestt" && !apiKey) {
       return null;
     }
 
@@ -116,7 +121,7 @@ export const useSTTConnection = () => {
       provider: current_stt_provider,
       model: current_stt_model,
       baseUrl,
-      apiKey,
+      apiKey: apiKey ?? "",
     };
   }, [
     current_stt_provider,

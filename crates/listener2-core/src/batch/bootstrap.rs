@@ -4,7 +4,7 @@ use std::time::Duration;
 use owhisper_client::{
     AdapterKind, ArgmaxAdapter, AssemblyAIAdapter, CactusAdapter, DashScopeAdapter,
     DeepgramAdapter, ElevenLabsAdapter, FireworksAdapter, GladiaAdapter, HyprnoteAdapter,
-    MistralAdapter, OpenAIAdapter, RealtimeSttAdapter, SonioxAdapter,
+    MistralAdapter, OpenAIAdapter, RealtimeSTTAdapter, RealtimeSttAdapter, SonioxAdapter,
 };
 use owhisper_interface::{ControlMessage, MixedMessage};
 use ractor::{ActorProcessingErr, ActorRef};
@@ -61,6 +61,9 @@ pub(super) async fn spawn_batch_task(
             spawn_batch_task_with_adapter::<HyprnoteAdapter>(args, myself).await
         }
         AdapterKind::Cactus => spawn_cactus_batch_task(args, myself).await,
+        AdapterKind::RealtimeSTT => {
+            spawn_batch_task_with_adapter::<RealtimeSTTAdapter>(args, myself).await
+        }
     }
 }
 

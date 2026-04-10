@@ -14,6 +14,7 @@ mod mistral;
 mod openai;
 mod owhisper;
 pub mod parsing;
+mod realtimestt;
 pub(crate) mod soniox;
 mod url_builder;
 
@@ -29,6 +30,7 @@ pub use hyprnote::*;
 pub use language::{LanguageQuality, LanguageSupport};
 pub use mistral::*;
 pub use openai::*;
+pub use realtimestt::*;
 pub use soniox::*;
 
 use std::collections::{BTreeSet, HashSet};
@@ -282,6 +284,13 @@ fn is_local_argmax(base_url: &str) -> bool {
     host_matches(base_url, is_local_host) && !is_hyprnote_local_proxy(base_url)
 }
 
+fn is_realtimestt_url(base_url: &str) -> bool {
+    url::Url::parse(base_url)
+        .ok()
+        .map(|u| is_local_host(u.host_str().unwrap_or("")) && u.port() == Some(8012))
+        .unwrap_or(false)
+}
+
 fn is_cactus_model(model: &str) -> bool {
     model.parse::<hypr_cactus_model::CactusSttModel>().is_ok()
 }
@@ -380,6 +389,8 @@ pub enum AdapterKind {
     Hyprnote,
     #[strum(serialize = "cactus")]
     Cactus,
+    #[strum(serialize = "realtimestt")]
+    RealtimeSTT,
 }
 
 impl AdapterKind {
@@ -392,6 +403,10 @@ impl AdapterKind {
 
         if is_hyprnote_proxy(base_url) {
             return Self::Hyprnote;
+        }
+
+        if is_realtimestt_url(base_url) {
+            return Self::RealtimeSTT;
         }
 
         if is_local_argmax(base_url) {
@@ -427,7 +442,7 @@ impl AdapterKind {
             Self::DashScope => DashScopeAdapter::language_support_live(languages),
             Self::Argmax => ArgmaxAdapter::language_support_live(languages, model),
             Self::Mistral => MistralAdapter::language_support_live(languages),
-            Self::Hyprnote | Self::Cactus => LanguageSupport::Supported {
+            Self::Hyprnote | Self::Cactus | Self::RealtimeSTT => LanguageSupport::Supported {
                 quality: LanguageQuality::NoData,
             },
         }
@@ -452,7 +467,7 @@ impl AdapterKind {
             Self::DashScope => DashScopeAdapter::language_support_batch(languages),
             Self::Argmax => ArgmaxAdapter::language_support_batch(languages, model),
             Self::Mistral => MistralAdapter::language_support_batch(languages),
-            Self::Hyprnote | Self::Cactus => LanguageSupport::Supported {
+            Self::Hyprnote | Self::Cactus | Self::RealtimeSTT => LanguageSupport::Supported {
                 quality: LanguageQuality::NoData,
             },
         }
